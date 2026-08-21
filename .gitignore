@@ -6,3 +6,7 @@ dist-ssr
 .env
 .env.local
 .vite
+
+# Рабочие материалы, не для деплоя
+Референсы/
+references/
