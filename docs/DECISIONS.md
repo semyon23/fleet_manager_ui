@@ -1,90 +1,93 @@
-# Decisions Log
+# Журнал решений
 
-Fixed architectural / stack decisions. Any change here must be discussed and dated.
+Зафиксированные архитектурные / стековые решения. Любое изменение — обсудить и датировать новой записью.
+
+Язык: **внутренние документы на русском**, **UI на английском**.
 
 ---
 
-## 2026-08-20 — Initial decisions after brief round 1
+## 2026-08-20 — Первая волна решений после брифа
 
-### D-001 — Protocol: VDA5050
+### D-001 — Протокол: VDA5050
 
-**Decision:** Backend and frontend communicate via **VDA5050** (v1.6 message spec).
-**Why:** Semyon is building the backend to this standard. Ecosystem support is mature.
-**Impact:**
-- Frontend uses `vda-5050-lib` (npm) for typed messages
-- Transport: **MQTT** (VDA5050 default) — WebSocket bridge in browser
-- No need to invent custom message contracts
+**Решение:** бэкенд и фронт общаются по **VDA5050** (спецификация сообщений v1.6).
+**Почему:** Семён строит бэк под этот стандарт. Экосистема зрелая.
+**Что это меняет:**
+- На фронте используем `vda-5050-lib` (npm) для типизированных сообщений
+- Транспорт: **MQTT** (дефолт VDA5050) — в браузере через WebSocket-мост
+- Не изобретаем свой контракт сообщений
 
-### D-002 — Map editor: vda5050-lif-editor approach
+### D-002 — Редактор карт: подход vda5050-lif-editor
 
-**Decision:** Approved [vda5050-lif-editor.vercel.app](https://vda5050-lif-editor.vercel.app/) as the reference. We build our own editor with the same LIF-JSON export format (compatible with VDA5050 Layout Interchange Format v1.0.0).
-**Why:** Open, standardized, referenced in Nav2 docs. Not portable as-is (React + Cytoscape stack), so we reimplement in Vue + Konva.
-**Impact:**
-- Custom Konva-based canvas editor
-- Export button produces LIF-compliant JSON
-- Import backend-served maps (starting with PNG + JSON zones; later `.pgm/.yaml` from ROS map_server)
+**Решение:** одобрен [vda5050-lif-editor.vercel.app](https://vda5050-lif-editor.vercel.app/) как ориентир. Делаем свой редактор с тем же форматом экспорта LIF-JSON (совместим с VDA5050 Layout Interchange Format v1.0.0).
+**Почему:** открытый, стандартизированный, упомянут в docs Nav2. Как есть не портируется (React + Cytoscape), поэтому переписываем на Vue + Konva.
+**Что это меняет:**
+- Свой канвас-редактор на Konva
+- Кнопка «Export» отдаёт LIF-совместимый JSON
+- Импорт карт с бэка (сначала PNG + JSON зон; позже `.pgm/.yaml` из ROS map_server)
 
-### D-003 — Stack: Vue 3 + JavaScript (no TypeScript)
+### D-003 — Стек: Vue 3 + JavaScript (без TypeScript)
 
-**Decision:** Vue 3 + Vite + Pinia + Vue Router 4 + Tailwind v4. **JavaScript, no TypeScript.**
-**Why:** Explicit backend/frontend split — Semyon requested Vue.js without TS.
-**Impact:**
-- No `.ts` / `.tsx` files
-- JSDoc annotations for critical shared types (VDA5050 payloads)
-- `vda-5050-lib` types available but not enforced
+**Решение:** Vue 3 + Vite + Pinia + Vue Router 4 + Tailwind v4. **JavaScript, без TypeScript.**
+**Почему:** явное требование от Семёна.
+**Что это меняет:**
+- Никаких `.ts` / `.tsx`
+- JSDoc-аннотации для критичных общих типов (payload'ы VDA5050)
+- Типы из `vda-5050-lib` доступны, но не форсим их проверку
 
-### D-004 — UI language: English
+### D-004 — Язык UI: английский
 
-**Decision:** All UI strings in English. No i18n at MVP stage.
-**Why:** Target market is international industrial buyers of AMR/AGV systems.
+**Решение:** все строки в UI на английском. i18n на MVP не делаем.
+**Почему:** целевой рынок — международные покупатели промышленных AMR/AGV систем.
+**Внутренние документы (docs/, README, PR-описания, коммит-мессаджи между собой) — на русском.**
 
-### D-005 — Color scheme: light theme, white → dark blue
+### D-005 — Цветовая схема: светлая тема, белый → тёмно-синий
 
-**Decision:** Light theme by default. Palette anchored on white (`#fff`) → deep blue (`brand-800: #1e40af`). Robot statuses use a separate categorical palette (green/yellow/red/gray).
-**Why:** Client preference. Reads as clean industrial control panel.
-**Impact:**
-- `--color-brand-*` scale in `src/assets/main.css`
-- Optional dark theme via `naive-ui` config, toggle in Topbar
+**Решение:** по умолчанию светлая тема. Палитра от белого (`#fff`) до глубокого синего (`brand-800: #1e40af`). Статусы роботов — отдельная категориальная палитра (зелёный/жёлтый/красный/серый).
+**Почему:** пожелание клиента. Читается как чистая индустриальная панель управления.
+**Что это меняет:**
+- Шкала `--color-brand-*` в `src/assets/main.css`
+- Опциональная тёмная тема через `naive-ui`, тумблер в топбаре
 
-### D-006 — Roles: 3 tiers (no read-only observer)
+### D-006 — Роли: 3 уровня (без read-only «Наблюдателя»)
 
-**Decision:** Operator / Engineer / Admin. **No** read-only "Observer" role.
-**Why:** Explicit brief answer. Simplifies auth model.
+**Решение:** Operator / Engineer / Admin. **Без** read-only роли «Observer».
+**Почему:** явный ответ в брифе. Упрощает модель аутентификации.
 
-### D-007 — Missions & Alerts are view-only in UI
+### D-007 — Missions и Alerts — view-only в UI
 
-**Decision:** Missions and Alerts are **read-only telemetry** rendered from backend streams. UI does not create/edit missions or alert rules.
-**Why:** Backend owns mission planning. UI is a visualization / control surface.
-**Open question:** How does the Operator role "assign missions" (role description) if UI is view-only? → clarify in round 2.
+**Решение:** Missions и Alerts — **read-only телеметрия**, рендерятся из бэкенд-стримов. UI не создаёт и не редактирует ни миссии, ни правила алертов.
+**Почему:** бэк владеет планированием миссий. UI — поверхность визуализации и контроля.
+**Открытый вопрос:** как Оператор «ставит задачи» (по описанию роли), если UI view-only? → уточнить во втором раунде.
 
-### D-008 — No Analytics module
+### D-008 — Модуля Analytics нет
 
-**Decision:** No analytics / heatmaps / CSV-PDF export at MVP.
-**Why:** Explicit brief answer.
+**Решение:** никакой аналитики / тепловых карт / экспортов CSV-PDF на MVP.
+**Почему:** явный ответ в брифе.
 
-### D-009 — Manual teleop: included
+### D-009 — Ручной teleop: включён
 
-**Decision:** Dedicated `/teleop` route with keyboard / joystick control per selected robot. Placeholder video feed slot.
-**Why:** Explicit brief request.
-**Impact:** `nipplejs` for touch joystick; WebSocket `cmd_vel`-style channel.
+**Решение:** отдельный маршрут `/teleop`, управление с клавиатуры / джойстика для выбранного робота. Слот под видеопоток — заглушка.
+**Почему:** явный запрос в брифе.
+**Что это меняет:** `nipplejs` для тач-джойстика; WebSocket-канал в стиле `cmd_vel`.
 
 ### D-010 — Multi-floor / multi-map
 
-**Decision:** Multiple maps and floors. Robot ↔ map assignment stored on backend. Selector in topbar. Robot may transition between maps.
-**Why:** Explicit brief answer.
+**Решение:** несколько карт и этажей. Связка «робот ↔ карта» хранится на бэке. Селектор в топбаре. Робот может переходить между картами.
+**Почему:** явный ответ в брифе.
 
-### D-011 — Repo & collaboration
+### D-011 — Репозиторий и коллаборация
 
-**Decision:** Repo at [github.com/DDmsngr/fleet-manager](https://github.com/DDmsngr/fleet-manager) (public). Deploy to GitHub Pages on push to `main`. Semyon invited as collaborator with `write` (push) permission.
-**Why:** Client can watch progress live; standard flow for this workspace.
+**Решение:** репо [github.com/DDmsngr/fleet-manager](https://github.com/DDmsngr/fleet-manager) (публичный). Деплой на GitHub Pages по push в `main`. Семён приглашён коллаборатором с правами `write` (push).
+**Почему:** клиент видит прогресс живьём; стандартный флоу для этого воркспейса.
 
 ---
 
-## Open questions for round 2 (bring to Semyon)
+## Открытые вопросы для второго раунда (спросить Семёна)
 
-- **OQ-1** (D-007): How does the Operator assign missions if UI is view-only? Do we need an "Assign mission" modal?
-- **OQ-2**: Does the backend expose an MQTT-over-WebSocket bridge (for browser), or should the fleet UI use a plain WebSocket wrapper the backend implements? VDA5050 assumes MQTT; browsers can't do raw MQTT.
-- **OQ-3**: Update rate of robot state messages (Hz)? Impacts UI throttling.
-- **OQ-4**: Authentication — JWT? API keys? SSO?
-- **OQ-5**: Map format handoff — backend delivers PNG + JSON zones, or `.pgm/.yaml` directly? Latter needs a browser parser.
-- **OQ-6**: Where will the robots operate? Warehouse / factory / hospital? Affects map iconography and copy tone.
+- **OQ-1** (D-007): как Оператор ставит миссии, если UI view-only? Нужна модалка «Assign mission»?
+- **OQ-2**: бэкенд поднимает MQTT-over-WebSocket мост (для браузера), или fleet-UI ходит через обёртку по обычному WebSocket, которую реализует бэк? VDA5050 подразумевает MQTT — браузер raw MQTT не умеет.
+- **OQ-3**: частота обновлений state-сообщений от робота (Гц)? Влияет на throttling UI.
+- **OQ-4**: аутентификация — JWT? API keys? SSO?
+- **OQ-5**: как передаётся карта с бэка — PNG + JSON зон, или сразу `.pgm/.yaml`? Второе потребует парсер в браузере.
+- **OQ-6**: где будут ездить роботы? Склад / завод / больница? Влияет на иконографику карт и тон копирайта.
