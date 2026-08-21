@@ -3,8 +3,8 @@ import { RouterLink } from 'vue-router'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: '□' },
-  { to: '/map', label: 'Live Map', icon: '◈' },
-  { to: '/map-editor', label: 'Map Editor', icon: '✎' },
+  { to: '/live', label: 'Live Map', icon: '◈' },
+  { to: '/maps', label: 'Maps', icon: '✎' },
   { to: '/robots', label: 'Robots', icon: '◉' },
   { to: '/missions', label: 'Missions', icon: '≡' },
   { to: '/alerts', label: 'Alerts', icon: '!' },
