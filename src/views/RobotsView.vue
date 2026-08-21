@@ -8,14 +8,27 @@ const store = useRobotsStore()
 const statusColor = {
   moving: '#22c55e',
   charging: '#eab308',
-  idle: '#94a3b8',
+  idle: '#64748b',
   error: '#ef4444',
-  offline: '#64748b',
+  offline: '#94a3b8',
 }
 
 const columns = [
+  {
+    title: '',
+    key: 'sprite',
+    width: 64,
+    render: (r) =>
+      h('img', {
+        src: r.sprite,
+        alt: r.id,
+        class: 'h-10 w-10 object-contain',
+        style: r.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : '',
+      }),
+  },
   { title: 'ID', key: 'id', render: (r) => h('span', { class: 'font-mono text-brand-800' }, r.id) },
   { title: 'Model', key: 'model' },
+  { title: 'Type', key: 'type', render: (r) => h('span', { class: 'text-xs text-slate-600' }, r.type) },
   {
     title: 'Status',
     key: 'status',

@@ -24,13 +24,6 @@ const statusColor = {
   error: '#ef4444',
   offline: '#94a3b8',
 }
-const statusFill = {
-  moving: '#dcfce7',
-  charging: '#fef9c3',
-  idle: '#e2e8f0',
-  error: '#fee2e2',
-  offline: '#f1f5f9',
-}
 
 const selected = ref(null)
 const hovered = ref(null)
@@ -38,6 +31,7 @@ const hovered = ref(null)
 const SCALE = 25
 const OFFSET_X = 60
 const OFFSET_Y = 60
+const ROBOT_SIZE = 52
 
 const filteredRobots = computed(() => {
   if (!activeMap.value) return robots.robots
@@ -51,7 +45,6 @@ const markers = computed(() =>
     px: OFFSET_X + r.x * SCALE,
     py: OFFSET_Y + r.y * SCALE,
     stroke: statusColor[r.status],
-    fill: statusFill[r.status],
     thetaDeg: (-r.theta * 180) / Math.PI,
   })),
 )
@@ -80,6 +73,9 @@ const markers = computed(() =>
             <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
               <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#e2e8f0" stroke-width="1" />
             </pattern>
+            <filter id="robot-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25" />
+            </filter>
           </defs>
           <rect width="700" height="600" fill="url(#grid)" />
 
@@ -113,38 +109,50 @@ const markers = computed(() =>
               v-if="hovered && hovered.id === m.id"
               :cx="m.px"
               :cy="m.py"
-              r="26"
+              :r="ROBOT_SIZE / 2 + 8"
               fill="#f97316"
               fill-opacity="0.28"
             />
 
-            <g :transform="`rotate(${m.thetaDeg} ${m.px} ${m.py})`">
-              <rect
-                :x="m.px - 10"
-                :y="m.py - 10"
-                width="20"
-                height="20"
-                rx="3"
-                :fill="m.fill"
-                :stroke="m.stroke"
-                stroke-width="2"
-              />
-              <rect
-                :x="m.px - 3"
-                :y="m.py - 15"
-                width="6"
-                height="6"
-                rx="1"
+            <ellipse
+              :cx="m.px"
+              :cy="m.py + ROBOT_SIZE / 2 - 4"
+              :rx="ROBOT_SIZE / 2 - 4"
+              ry="4"
+              fill="black"
+              fill-opacity="0.18"
+            />
+
+            <image
+              :href="m.sprite"
+              :x="m.px - ROBOT_SIZE / 2"
+              :y="m.py - ROBOT_SIZE / 2"
+              :width="ROBOT_SIZE"
+              :height="ROBOT_SIZE"
+              :style="m.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : ''"
+              filter="url(#robot-shadow)"
+            />
+
+            <g :transform="`translate(${m.px} ${m.py + ROBOT_SIZE / 2 + 6}) rotate(${m.thetaDeg})`">
+              <polygon
+                points="-4,0 4,0 0,-8"
                 :fill="m.stroke"
               />
             </g>
 
+            <g :transform="`translate(${m.px + ROBOT_SIZE / 2 - 6} ${m.py - ROBOT_SIZE / 2 + 6})`">
+              <circle r="6" fill="white" />
+              <circle r="5" :fill="m.stroke" />
+            </g>
+
             <text
-              :x="m.px + 16"
-              :y="m.py + 4"
+              :x="m.px"
+              :y="m.py + ROBOT_SIZE / 2 + 22"
+              text-anchor="middle"
               font-size="10"
               font-family="JetBrains Mono, monospace"
               fill="#0f172a"
+              font-weight="500"
             >
               {{ m.id }}
             </text>
@@ -152,29 +160,29 @@ const markers = computed(() =>
 
           <g v-if="hovered" pointer-events="none">
             <rect
-              :x="Math.min(hovered.px + 40, 520)"
-              :y="Math.max(hovered.py - 44, 8)"
-              width="170"
-              height="72"
+              :x="Math.min(hovered.px + 40, 510)"
+              :y="Math.max(hovered.py - 56, 8)"
+              width="180"
+              height="86"
               rx="4"
               fill="white"
               stroke="#1e40af"
               stroke-width="1"
-              filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
+              filter="drop-shadow(0 2px 4px rgba(0,0,0,0.15))"
             />
             <text
-              :x="Math.min(hovered.px + 48, 528)"
-              :y="Math.max(hovered.py - 26, 26)"
+              :x="Math.min(hovered.px + 48, 518)"
+              :y="Math.max(hovered.py - 38, 26)"
               font-size="11"
               font-family="JetBrains Mono, monospace"
               fill="#1e40af"
               font-weight="bold"
             >
-              {{ hovered.id }}
+              {{ hovered.id }} · {{ hovered.model }}
             </text>
             <text
-              :x="Math.min(hovered.px + 48, 528)"
-              :y="Math.max(hovered.py - 12, 40)"
+              :x="Math.min(hovered.px + 48, 518)"
+              :y="Math.max(hovered.py - 22, 42)"
               font-size="10"
               font-family="JetBrains Mono, monospace"
               :fill="hovered.stroke"
@@ -182,8 +190,8 @@ const markers = computed(() =>
               ● {{ hovered.status }}
             </text>
             <text
-              :x="Math.min(hovered.px + 48, 528)"
-              :y="Math.max(hovered.py + 2, 54)"
+              :x="Math.min(hovered.px + 48, 518)"
+              :y="Math.max(hovered.py - 8, 56)"
               font-size="10"
               font-family="JetBrains Mono, monospace"
               fill="#64748b"
@@ -191,8 +199,8 @@ const markers = computed(() =>
               battery {{ hovered.battery }}%
             </text>
             <text
-              :x="Math.min(hovered.px + 48, 528)"
-              :y="Math.max(hovered.py + 16, 68)"
+              :x="Math.min(hovered.px + 48, 518)"
+              :y="Math.max(hovered.py + 6, 70)"
               font-size="10"
               font-family="JetBrains Mono, monospace"
               fill="#64748b"
@@ -207,7 +215,11 @@ const markers = computed(() =>
     <NCard :title="selected ? selected.id : 'Robot details'" size="small" class="!bg-white">
       <div v-if="!selected" class="text-sm text-slate-500">Click a robot to see full details.</div>
       <div v-else class="flex flex-col gap-3 text-sm">
+        <div class="grid place-items-center rounded bg-slate-100 py-3">
+          <img :src="selected.sprite" :alt="selected.id" class="h-32 w-32 object-contain" />
+        </div>
         <div class="flex justify-between"><span class="text-slate-500">Model</span><span class="font-mono">{{ selected.model }}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Type</span><span class="text-xs">{{ selected.type }}</span></div>
         <div class="flex justify-between">
           <span class="text-slate-500">Status</span>
           <NTag :color="{ color: selected.stroke, textColor: 'white' }" size="small">{{ selected.status }}</NTag>

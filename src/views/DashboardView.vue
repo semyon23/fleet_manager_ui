@@ -43,11 +43,21 @@ const columns = [
         <NDataTable :columns="columns" :data="events" :bordered="false" size="small" />
       </NCard>
       <NCard title="Fleet snapshot" size="small" class="!bg-white">
-        <div class="flex flex-col gap-3">
-          <div v-for="r in store.robots" :key="r.id" class="flex items-center justify-between rounded border border-slate-100 px-3 py-2">
-            <span class="font-mono text-xs text-brand-800">{{ r.id }}</span>
-            <span class="text-xs text-slate-500">{{ r.status }}</span>
-            <span class="font-mono text-xs text-slate-700">{{ r.battery }}%</span>
+        <div class="flex flex-col gap-1">
+          <div
+            v-for="r in store.robots"
+            :key="r.id"
+            class="flex items-center gap-3 rounded border border-slate-100 px-2 py-1.5"
+          >
+            <img
+              :src="r.sprite"
+              :alt="r.id"
+              class="h-8 w-8 object-contain"
+              :style="r.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : ''"
+            />
+            <span class="flex-1 font-mono text-xs text-brand-800">{{ r.id }}</span>
+            <span class="w-16 text-xs text-slate-500">{{ r.status }}</span>
+            <span class="w-10 text-right font-mono text-xs text-slate-700">{{ r.battery }}%</span>
           </div>
         </div>
       </NCard>
