@@ -2,6 +2,7 @@
 import { useRobotsStore } from '../stores/robots'
 import { NCard, NDataTable, NTag, NButton } from 'naive-ui'
 import { h } from 'vue'
+import { previewSpriteFor } from '../lib/robotSprite'
 
 const store = useRobotsStore()
 
@@ -20,7 +21,7 @@ const columns = [
     width: 64,
     render: (r) =>
       h('img', {
-        src: r.sprite,
+        src: previewSpriteFor(r),
         alt: r.id,
         class: 'h-10 w-10 object-contain',
         style: r.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : '',

@@ -3,6 +3,7 @@ import { useRobotsStore } from '../stores/robots'
 import { useMapsStore } from '../stores/maps'
 import { NCard, NTag, NSelect } from 'naive-ui'
 import { ref, computed, watchEffect } from 'vue'
+import { spriteFor, previewSpriteFor } from '../lib/robotSprite'
 
 const robots = useRobotsStore()
 const maps = useMapsStore()
@@ -46,6 +47,8 @@ const markers = computed(() =>
     py: OFFSET_Y + r.y * SCALE,
     stroke: statusColor[r.status],
     thetaDeg: (-r.theta * 180) / Math.PI,
+    activeSprite: spriteFor(r),
+    hasDirections: !!r.sprites,
   })),
 )
 </script>
@@ -124,7 +127,7 @@ const markers = computed(() =>
             />
 
             <image
-              :href="m.sprite"
+              :href="m.activeSprite"
               :x="m.px - ROBOT_SIZE / 2"
               :y="m.py - ROBOT_SIZE / 2"
               :width="ROBOT_SIZE"
@@ -133,7 +136,7 @@ const markers = computed(() =>
               filter="url(#robot-shadow)"
             />
 
-            <g :transform="`translate(${m.px} ${m.py + ROBOT_SIZE / 2 + 6}) rotate(${m.thetaDeg})`">
+            <g v-if="!m.hasDirections" :transform="`translate(${m.px} ${m.py + ROBOT_SIZE / 2 + 6}) rotate(${m.thetaDeg})`">
               <polygon
                 points="-4,0 4,0 0,-8"
                 :fill="m.stroke"
@@ -216,7 +219,7 @@ const markers = computed(() =>
       <div v-if="!selected" class="text-sm text-slate-500">Click a robot to see full details.</div>
       <div v-else class="flex flex-col gap-3 text-sm">
         <div class="grid place-items-center rounded bg-slate-100 py-3">
-          <img :src="selected.sprite" :alt="selected.id" class="h-32 w-32 object-contain" />
+          <img :src="previewSpriteFor(selected)" :alt="selected.id" class="h-32 w-32 object-contain" />
         </div>
         <div class="flex justify-between"><span class="text-slate-500">Model</span><span class="font-mono">{{ selected.model }}</span></div>
         <div class="flex justify-between"><span class="text-slate-500">Type</span><span class="text-xs">{{ selected.type }}</span></div>

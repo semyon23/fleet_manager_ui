@@ -3,8 +3,20 @@ import { ref, computed } from 'vue'
 
 const BASE = import.meta.env.BASE_URL
 
+const AMR01_DIRS = {
+  n: `${BASE}robots/amr-01/n.png`,
+  ne: `${BASE}robots/amr-01/ne.png`,
+  e: `${BASE}robots/amr-01/e.png`,
+  se: `${BASE}robots/amr-01/se.png`,
+  s: `${BASE}robots/amr-01/s.png`,
+  sw: `${BASE}robots/amr-01/sw.png`,
+  w: `${BASE}robots/amr-01/w.png`,
+  nw: `${BASE}robots/amr-01/nw.png`,
+  top: `${BASE}robots/amr-01/top.png`,
+}
+
 const MOCK_ROBOTS = [
-  { id: 'amr-01', model: 'Transporter T-1', type: 'Transport pod',   sprite: `${BASE}robots/amr-01.png`, status: 'moving',   battery: 78, x: 12.4, y: 8.2,  theta: 1.57,  mission: 'M-104', uptime: '3d 12h' },
+  { id: 'amr-01', model: 'Transporter T-1', type: 'Transport pod',   sprites: AMR01_DIRS,                status: 'moving',   battery: 78, x: 12.4, y: 8.2,  theta: 1.57,  mission: 'M-104', uptime: '3d 12h' },
   { id: 'amr-02', model: 'Forklift F-2',   type: 'Autonomous forklift', sprite: `${BASE}robots/amr-02.png`, status: 'charging', battery: 34, x: 2.1,  y: 1.5,  theta: 0,     mission: null,     uptime: '2d 4h'  },
   { id: 'amr-03', model: 'Manipulator M-3', type: 'Arm robot',        sprite: `${BASE}robots/amr-03.png`, status: 'idle',    battery: 92, x: 6.8,  y: 4.3,  theta: 3.14,  mission: null,     uptime: '5d 22h' },
   { id: 'amr-04', model: 'Rover R-4',      type: 'Patrol rover',      sprite: `${BASE}robots/amr-04.png`, status: 'moving',   battery: 55, x: 18.9, y: 12.7, theta: -1.57, mission: 'M-107', uptime: '1d 8h'  },
