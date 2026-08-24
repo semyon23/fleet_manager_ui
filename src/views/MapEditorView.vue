@@ -6,7 +6,7 @@ import { useRobotsStore } from '../stores/robots'
 import { pixelToWorld } from '../lib/nav2meta'
 import { exportNav2GeoJson, downloadJson } from '../lib/exportGeoJson'
 import { exportLif } from '../lib/exportLif'
-import { NCard, NButton, NPopselect, useMessage } from 'naive-ui'
+import { NCard, NButton, NPopselect, NSelect, useMessage } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,9 +28,23 @@ let mapImage = null
 let zoneDraft = null
 let lastWaypoint = null
 
+// Shape reference maps — чтобы во время drag двигать только связанные edges,
+// а не пересоздавать всю сцену (иначе Konva теряет reference на draggable-shape).
+const waypointShapes = new Map()
+const edgeShapes = new Map()
+
 const scale = ref(1)
 const offset = ref({ x: 0, y: 0 })
 const hoverWorld = ref(null)
+
+const gridStep = ref('auto') // 'auto' | number (метры)
+const GRID_STEP_PRESETS = [
+  { label: 'Auto', value: 'auto' },
+  ...[0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10].map((v) => ({
+    label: `${v} m`,
+    value: String(v),
+  })),
+]
 
 onMounted(async () => {
   if (!map.value) {
@@ -271,13 +285,18 @@ function drawGrid() {
   const stageW = stage.width()
   const stageH = stage.height()
 
-  // Шаг в метрах — адаптивный по zoom
-  const targetPxStep = 80 // ~80px между линиями
-  const metersPerPx = meta.resolution / s
-  const rawStep = targetPxStep * metersPerPx
-  const stepChoices = [0.25, 0.5, 1, 2, 5, 10, 20, 50]
-  let step = stepChoices[0]
-  for (const c of stepChoices) if (c >= rawStep) { step = c; break }
+  // Шаг в метрах — либо user override, либо адаптивный по zoom.
+  let step
+  if (gridStep.value !== 'auto') {
+    step = Number(gridStep.value)
+  } else {
+    const targetPxStep = 80
+    const metersPerPx = meta.resolution / s
+    const rawStep = targetPxStep * metersPerPx
+    const stepChoices = [0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 50]
+    step = stepChoices[0]
+    for (const c of stepChoices) if (c >= rawStep) { step = c; break }
+  }
 
   const mapH = map.value.height
   const mapW = map.value.width
@@ -357,6 +376,8 @@ function drawGrid() {
 function redraw() {
   if (!drawLayer || !map.value) return
   drawLayer.destroyChildren()
+  waypointShapes.clear()
+  edgeShapes.clear()
 
   for (const z of map.value.zones) {
     const p1 = fromImagePx(z.u1, z.v1)
@@ -403,6 +424,7 @@ function redraw() {
       redraw()
     })
     drawLayer.add(arrow)
+    edgeShapes.set(e.id, arrow)
   }
 
   for (const w of map.value.waypoints) {
@@ -410,18 +432,18 @@ function redraw() {
     const isSelected = selectedId.value === w.id
     const isLast = lastWaypoint?.id === w.id && tool.value === 'route'
 
+    let ring = null
     if (isLast) {
-      drawLayer.add(
-        new konva.Circle({
-          x: p.x,
-          y: p.y,
-          radius: 12,
-          stroke: '#22c55e',
-          strokeWidth: 2,
-          dash: [3, 3],
-          listening: false,
-        })
-      )
+      ring = new konva.Circle({
+        x: p.x,
+        y: p.y,
+        radius: 12,
+        stroke: '#22c55e',
+        strokeWidth: 2,
+        dash: [3, 3],
+        listening: false,
+      })
+      drawLayer.add(ring)
     }
 
     const circle = new konva.Circle({
@@ -448,27 +470,65 @@ function redraw() {
         redraw()
       }
     })
+    // Оптимистичный drag: во время движения обновляем только связанные edges + label
+    // на канвасе напрямую, без пересоздания сцены. Store пишем один раз на dragend.
     circle.on('dragmove', () => {
+      const nx = circle.x()
+      const ny = circle.y()
+
+      // Двигаем label
+      if (circle.__label) {
+        circle.__label.x(nx + 10)
+        circle.__label.y(ny - 16)
+      }
+      // Двигаем dashed-ring для last-in-chain
+      if (circle.__ring) {
+        circle.__ring.x(nx)
+        circle.__ring.y(ny)
+      }
+
+      // Обновляем все edges, привязанные к этой ноде
+      for (const edge of map.value.edges) {
+        if (edge.from !== w.id && edge.to !== w.id) continue
+        const arrow = edgeShapes.get(edge.id)
+        if (!arrow) continue
+        const other = edge.from === w.id ? byId[edge.to] : byId[edge.from]
+        if (!other) continue
+        const p = fromImagePx(other.u, other.v)
+        arrow.points(
+          edge.from === w.id ? [nx, ny, p.x, p.y] : [p.x, p.y, nx, ny]
+        )
+      }
+
+      drawLayer.batchDraw()
+    })
+
+    circle.on('dragend', () => {
       const nx = circle.x()
       const ny = circle.y()
       const u = (nx - offset.value.x) / scale.value
       const v = (ny - offset.value.y) / scale.value
       const updated = map.value.waypoints.map((x) => (x.id === w.id ? { ...x, u, v } : x))
       store.update(map.value.id, { waypoints: updated })
+      // Полный redraw только в конце — теперь Konva не теряет reference на дракаемый shape
       redraw()
     })
+
     drawLayer.add(circle)
-    drawLayer.add(
-      new konva.Text({
-        x: p.x + 10,
-        y: p.y - 16,
-        text: w.id,
-        fontSize: 10,
-        fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-        fill: isSelected ? '#c2410c' : '#1e40af',
-        listening: false,
-      })
-    )
+    waypointShapes.set(w.id, circle)
+
+    const label = new konva.Text({
+      x: p.x + 10,
+      y: p.y - 16,
+      text: w.id,
+      fontSize: 10,
+      fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+      fill: isSelected ? '#c2410c' : '#1e40af',
+      listening: false,
+    })
+    drawLayer.add(label)
+    circle.__label = label
+    circle.__ring = ring
   }
 
   drawLayer.batchDraw()
@@ -567,6 +627,10 @@ watch(tool, () => {
   zoneDraft = null
   redraw()
 })
+
+watch(gridStep, () => {
+  drawGrid()
+})
 </script>
 
 <template>
@@ -632,6 +696,11 @@ watch(tool, () => {
               {{ opt.label }}
             </button>
           </div>
+        </div>
+
+        <div class="mt-4">
+          <div class="mb-1 text-xs uppercase tracking-wider text-slate-500">Grid step</div>
+          <NSelect v-model:value="gridStep" :options="GRID_STEP_PRESETS" size="small" />
         </div>
 
         <div class="mt-4 flex flex-col gap-1 font-mono text-xs text-slate-500">
