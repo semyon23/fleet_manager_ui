@@ -174,6 +174,32 @@ mode: trinary
 
 ---
 
+## 2026-08-24 — Раунд 4: полноценный редактор карт с экспортом
+
+### D-019 — Основной выход редактора — GeoJSON (Nav2 Route Server)
+
+**Решение:** ключевой формат экспорта редактора карт — **Nav2 Route Server GeoJSON**. Это то что Семён ожидает получить «на выходе». VDA5050 LIF идёт вторым экспортом для интероперабельности с другими системами по стандарту VDMA.
+**Почему:** VDA5050 LIF даёт полный граф с actions/trajectories, но для передачи роботу-ROS2 нужен именно Nav2 Route Server формат: `FeatureCollection` с `Point`-нодами и «пустыми» `MultiLineString`-эджами со ссылкой через `startid/endid`. Формат сверен с [bekirbostanci/vda5050_lif_editor](https://github.com/bekirbostanci/vda5050_lif_editor).
+**Что это меняет:**
+- `src/lib/exportGeoJson.js` — экспорт Nav2 Route Server GeoJSON, координаты в метрах через `pixelToWorld` из `nav2meta.js`, node id — числовые индексы, edge id продолжают счётчик
+- `src/lib/exportLif.js` — экспорт VDA5050 LIF 1.0.0 (metaInformation + layouts[nodes/edges/stations])
+- Кнопка `Export ▾` в тулбаре редактора с выбором формата
+- CRS: `urn:ogc:def:crs:EPSG::3857` (как у vda5050-lif-editor)
+
+### D-020 — Функциональность редактора: select / drag / delete / props
+
+**Решение:** редактор поддерживает:
+- **Select** — клик по любому элементу (waypoint / edge / zone) выделяет его. Выделенный — оранжевый, показывается в правой панели «Selected».
+- **Drag waypoint** — в режиме Select точку можно перетаскивать, все edges обновляются автоматически.
+- **Delete** — клавиша `Delete` / `Backspace`, или кнопка в панели. При удалении waypoint удаляются и связанные edges.
+- **Edge properties** — cost + max speed (m/s) редактируются в панели.
+- **Real-time coords** — при hover под курсором показываются метрические координаты (x, y в м) в консольном оверлее.
+- **Escape** — сброс селекта и любого draft-состояния (edge start / zone corner).
+
+**Почему:** Семён сравнил с vda5050-lif-editor как эталоном UX. Без drag/delete/properties редактор не «нормальный».
+
+---
+
 ## Открытые вопросы для второго раунда (спросить Семёна)
 
 - **OQ-1** (D-007): как Оператор ставит миссии, если UI view-only? Нужна модалка «Assign mission»?
