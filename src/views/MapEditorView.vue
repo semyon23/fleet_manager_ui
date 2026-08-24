@@ -36,6 +36,7 @@ const edgeShapes = new Map()
 const scale = ref(1)
 const offset = ref({ x: 0, y: 0 })
 const hoverWorld = ref(null)
+const zoneDraftArea = ref(null)
 
 const gridStep = ref('auto') // 'auto' | number (метры)
 const GRID_STEP_PRESETS = [
@@ -117,7 +118,82 @@ function initStage() {
 
   stage.on('click tap', onStageClick)
   stage.on('wheel', onWheel)
-  stage.on('mousemove', onMouseMove)
+  stage.on('mousemove touchmove', onMouseMove)
+  stage.on('mousedown touchstart', onPointerDown)
+  stage.on('mouseup touchend', onPointerUp)
+  stage.on('mouseleave', onPointerCancel)
+}
+
+// Zone drag-to-draw state
+let zoneDrawShape = null // Konva.Rect с draft-визуалом
+
+function zoneColor(kind) {
+  return kind === 'forbidden' ? '#ef4444' : kind === 'charge' ? '#3b82f6' : '#eab308'
+}
+
+function onPointerDown(e) {
+  if (!map.value || !mapImage) return
+  if (!tool.value.startsWith('zone-')) return
+  // Игнорируем нажатие на существующем shape (например, при клике на другой уже нарисованной зоне)
+  if (e.target !== stage && e.target !== mapImage) return
+
+  const { u, v } = toImagePx()
+  if (u < 0 || v < 0 || u > map.value.width || v > map.value.height) return
+
+  const kind = tool.value.replace('zone-', '')
+  zoneDraft = { kind, u1: u, v1: v }
+
+  const p = fromImagePx(u, v)
+  zoneDrawShape = new konva.Rect({
+    x: p.x,
+    y: p.y,
+    width: 0,
+    height: 0,
+    fill: zoneColor(kind),
+    opacity: 0.28,
+    stroke: zoneColor(kind),
+    strokeWidth: 2,
+    dash: [4, 4],
+    listening: false,
+  })
+  drawLayer.add(zoneDrawShape)
+  drawLayer.batchDraw()
+}
+
+function onPointerUp() {
+  if (!zoneDraft || !map.value) {
+    zoneDraft = null
+    return
+  }
+  const { u, v } = toImagePx()
+  const wPx = Math.abs(u - zoneDraft.u1)
+  const hPx = Math.abs(v - zoneDraft.v1)
+
+  if (wPx > 3 && hPx > 3) {
+    const zone = {
+      id: 'zn-' + Math.random().toString(36).slice(2, 6),
+      kind: zoneDraft.kind,
+      u1: Math.min(zoneDraft.u1, u),
+      v1: Math.min(zoneDraft.v1, v),
+      u2: Math.max(zoneDraft.u1, u),
+      v2: Math.max(zoneDraft.v1, v),
+    }
+    store.update(map.value.id, { zones: [...map.value.zones, zone] })
+  }
+  zoneDraft = null
+  if (zoneDrawShape) {
+    zoneDrawShape.destroy()
+    zoneDrawShape = null
+  }
+  redraw()
+}
+
+function onPointerCancel() {
+  if (zoneDrawShape) {
+    zoneDrawShape.destroy()
+    zoneDrawShape = null
+  }
+  zoneDraft = null
 }
 
 function toImagePx() {
@@ -140,6 +216,26 @@ function onMouseMove() {
   } else {
     const { x, y } = pixelToWorld(map.value.meta, u, v, map.value.height)
     hoverWorld.value = { x, y, u, v }
+  }
+
+  // Live preview зоны, пока пользователь тянет
+  if (zoneDraft && zoneDrawShape) {
+    const p1 = fromImagePx(zoneDraft.u1, zoneDraft.v1)
+    const p2 = fromImagePx(u, v)
+    zoneDrawShape.setAttrs({
+      x: Math.min(p1.x, p2.x),
+      y: Math.min(p1.y, p2.y),
+      width: Math.abs(p2.x - p1.x),
+      height: Math.abs(p2.y - p1.y),
+    })
+    // Площадь в м²
+    const meters = map.value.meta.resolution
+    const areaW = Math.abs(u - zoneDraft.u1) * meters
+    const areaH = Math.abs(v - zoneDraft.v1) * meters
+    zoneDraftArea.value = { w: areaW, h: areaH, area: areaW * areaH }
+    drawLayer.batchDraw()
+  } else if (zoneDraftArea.value) {
+    zoneDraftArea.value = null
   }
 }
 
@@ -215,26 +311,8 @@ function onStageClick(e) {
       selectedId.value = null
       redraw()
     }
-  } else if (tool.value.startsWith('zone-')) {
-    if (!inBounds) return
-    const kind = tool.value.replace('zone-', '')
-    if (!zoneDraft) {
-      zoneDraft = { kind, x1: u, y1: v }
-      msg.info('Click second corner to finish zone')
-    } else {
-      const zone = {
-        id: 'zn-' + Math.random().toString(36).slice(2, 6),
-        kind,
-        u1: Math.min(zoneDraft.x1, u),
-        v1: Math.min(zoneDraft.y1, v),
-        u2: Math.max(zoneDraft.x1, u),
-        v2: Math.max(zoneDraft.y1, v),
-      }
-      store.update(map.value.id, { zones: [...map.value.zones, zone] })
-      zoneDraft = null
-      redraw()
-    }
   }
+  // Zone-tools обрабатываются через pointerdown/move/up (drag-to-draw), не через click.
 }
 
 function addEdge(fromId, toId) {
@@ -584,9 +662,9 @@ function toggleRobot(id) {
 const tools = [
   { key: 'route', label: 'Draw route', hint: 'Click on the map to drop a waypoint. Each new click adds the next waypoint and connects it to the previous one. Click an existing point to join it. Enter/Escape ends the chain.' },
   { key: 'select', label: 'Select / move', hint: 'Click element to select. Drag waypoint to move. Del to remove.' },
-  { key: 'zone-forbidden', label: 'Forbidden zone', hint: 'Click two corners.' },
-  { key: 'zone-charge', label: 'Charge zone', hint: 'Click two corners.' },
-  { key: 'zone-loading', label: 'Loading zone', hint: 'Click two corners.' },
+  { key: 'zone-forbidden', label: 'Forbidden zone', hint: 'Hold mouse and drag to draw the zone. Release to finish.' },
+  { key: 'zone-charge', label: 'Charge zone', hint: 'Hold mouse and drag to draw the zone. Release to finish.' },
+  { key: 'zone-loading', label: 'Loading zone', hint: 'Hold mouse and drag to draw the zone. Release to finish.' },
 ]
 
 const selectedInfo = computed(() => {
@@ -713,6 +791,11 @@ watch(gridStep, () => {
         <div v-if="hoverWorld" class="mt-2 rounded bg-slate-900 p-2 font-mono text-[10px] text-emerald-300">
           x: {{ hoverWorld.x.toFixed(3) }} m<br />
           y: {{ hoverWorld.y.toFixed(3) }} m
+        </div>
+
+        <div v-if="zoneDraftArea" class="mt-2 rounded bg-amber-100 p-2 font-mono text-[10px] text-amber-900">
+          {{ zoneDraftArea.w.toFixed(2) }} × {{ zoneDraftArea.h.toFixed(2) }} m<br />
+          area {{ zoneDraftArea.area.toFixed(2) }} m²
         </div>
       </NCard>
 
