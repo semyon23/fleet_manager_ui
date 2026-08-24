@@ -15,17 +15,18 @@ const robotsStore = useRobotsStore()
 const msg = useMessage()
 
 const map = computed(() => store.get(route.params.id))
-const tool = ref('select')
+const tool = ref('route')
 const selectedId = ref(null)
 
 const stageEl = ref(null)
 let konva = null
 let stage = null
 let bgLayer = null
+let gridLayer = null
 let drawLayer = null
 let mapImage = null
-let currentEdgeStart = null
 let zoneDraft = null
+let lastWaypoint = null
 
 const scale = ref(1)
 const offset = ref({ x: 0, y: 0 })
@@ -53,11 +54,12 @@ function onKey(e) {
       deleteSelected()
       e.preventDefault()
     }
-  } else if (e.key === 'Escape') {
-    selectedId.value = null
-    currentEdgeStart = null
+  } else if (e.key === 'Escape' || e.key === 'Enter') {
+    lastWaypoint = null
     zoneDraft = null
+    selectedId.value = null
     redraw()
+    if (e.key === 'Enter') msg.info('Chain ended — next click starts a new route')
   }
 }
 
@@ -69,14 +71,16 @@ function initStage() {
   const h = container.clientHeight
 
   stage = new konva.Stage({ container, width: w, height: h })
-  bgLayer = new konva.Layer()
+  bgLayer = new konva.Layer({ listening: false })
+  gridLayer = new konva.Layer({ listening: false })
   drawLayer = new konva.Layer()
   stage.add(bgLayer)
+  stage.add(gridLayer)
   stage.add(drawLayer)
 
   const img = new Image()
   img.onload = () => {
-    const fit = Math.min(w / img.width, h / img.height, 1)
+    const fit = Math.min(w / img.width, h / img.height, 1) * 0.9
     scale.value = fit
     offset.value = {
       x: (w - img.width * fit) / 2,
@@ -92,6 +96,7 @@ function initStage() {
     })
     bgLayer.add(mapImage)
     bgLayer.draw()
+    drawGrid()
     redraw()
   }
   img.src = map.value.pgmDataUrl
@@ -148,42 +153,56 @@ function onWheel(e) {
     })
     bgLayer.batchDraw()
   }
+  drawGrid()
   redraw()
 }
 
 function onStageClick(e) {
   if (!map.value || !mapImage) return
-  const { u, v } = toImagePx()
-  if (u < 0 || v < 0 || u > map.value.width || v > map.value.height) return
+  const target = e.target
+  const clickedOnStage = target === stage || target === mapImage
 
-  if (tool.value === 'select') {
-    const wp = pickWaypointAt(u, v)
-    selectedId.value = wp ? wp.id : null
-    redraw()
-  } else if (tool.value === 'waypoint') {
-    const wp = { id: 'wp-' + Math.random().toString(36).slice(2, 6), u, v }
-    store.update(map.value.id, { waypoints: [...map.value.waypoints, wp] })
-    selectedId.value = wp.id
-    redraw()
-  } else if (tool.value === 'edge') {
-    const wp = pickWaypointAt(u, v)
-    if (!wp) return msg.warning('Click on a waypoint')
-    if (!currentEdgeStart) {
-      currentEdgeStart = wp
-      msg.info(`Edge from ${wp.id} — click target waypoint`)
-    } else if (currentEdgeStart.id !== wp.id) {
-      const edge = {
-        id: 'ed-' + Math.random().toString(36).slice(2, 6),
-        from: currentEdgeStart.id,
-        to: wp.id,
-        cost: 0,
-        maxSpeed: 1.0,
+  const { u, v } = toImagePx()
+  const inBounds = u >= 0 && v >= 0 && u <= map.value.width && v <= map.value.height
+
+  if (tool.value === 'route') {
+    if (!inBounds) return
+    // Клик на существующей ноде — присоединяем цепочку к ней
+    const existing = clickedOnStage ? null : findWaypointByShape(target)
+    if (existing) {
+      if (lastWaypoint && lastWaypoint.id !== existing.id) {
+        addEdge(lastWaypoint.id, existing.id)
       }
-      store.update(map.value.id, { edges: [...map.value.edges, edge] })
-      currentEdgeStart = null
+      lastWaypoint = existing
+    } else if (clickedOnStage) {
+      // Клик по пустому месту — новая нода + edge от предыдущей
+      const wp = { id: 'wp-' + Math.random().toString(36).slice(2, 6), u, v }
+      const waypoints = [...map.value.waypoints, wp]
+      let edges = map.value.edges
+      if (lastWaypoint) {
+        edges = [
+          ...edges,
+          {
+            id: 'ed-' + Math.random().toString(36).slice(2, 6),
+            from: lastWaypoint.id,
+            to: wp.id,
+            cost: 0,
+            maxSpeed: 1.0,
+          },
+        ]
+      }
+      store.update(map.value.id, { waypoints, edges })
+      lastWaypoint = wp
+      redraw()
+    }
+  } else if (tool.value === 'select') {
+    // Клик на пустом месте — сброс селекта (клики на элементах обрабатываются в shape.on)
+    if (clickedOnStage) {
+      selectedId.value = null
       redraw()
     }
   } else if (tool.value.startsWith('zone-')) {
+    if (!inBounds) return
     const kind = tool.value.replace('zone-', '')
     if (!zoneDraft) {
       zoneDraft = { kind, x1: u, y1: v }
@@ -204,9 +223,24 @@ function onStageClick(e) {
   }
 }
 
-function pickWaypointAt(u, v) {
-  const r = 10 / scale.value
-  return map.value.waypoints.find((w) => Math.hypot(w.u - u, w.v - v) < r) || null
+function addEdge(fromId, toId) {
+  const exists = map.value.edges.some((e) => e.from === fromId && e.to === toId)
+  if (exists) return
+  const edge = {
+    id: 'ed-' + Math.random().toString(36).slice(2, 6),
+    from: fromId,
+    to: toId,
+    cost: 0,
+    maxSpeed: 1.0,
+  }
+  store.update(map.value.id, { edges: [...map.value.edges, edge] })
+  redraw()
+}
+
+function findWaypointByShape(shape) {
+  const id = shape?.attrs?.wpId
+  if (!id) return null
+  return map.value.waypoints.find((w) => w.id === id) || null
 }
 
 function deleteSelected() {
@@ -216,6 +250,7 @@ function deleteSelected() {
     const waypoints = map.value.waypoints.filter((w) => w.id !== id)
     const edges = map.value.edges.filter((e) => e.from !== id && e.to !== id)
     store.update(map.value.id, { waypoints, edges })
+    if (lastWaypoint?.id === id) lastWaypoint = null
     msg.info('Waypoint and its edges deleted')
   } else if (id.startsWith('ed-')) {
     store.update(map.value.id, { edges: map.value.edges.filter((e) => e.id !== id) })
@@ -226,6 +261,97 @@ function deleteSelected() {
   }
   selectedId.value = null
   redraw()
+}
+
+function drawGrid() {
+  if (!gridLayer || !map.value) return
+  gridLayer.destroyChildren()
+  const meta = map.value.meta
+  const s = scale.value
+  const stageW = stage.width()
+  const stageH = stage.height()
+
+  // Шаг в метрах — адаптивный по zoom
+  const targetPxStep = 80 // ~80px между линиями
+  const metersPerPx = meta.resolution / s
+  const rawStep = targetPxStep * metersPerPx
+  const stepChoices = [0.25, 0.5, 1, 2, 5, 10, 20, 50]
+  let step = stepChoices[0]
+  for (const c of stepChoices) if (c >= rawStep) { step = c; break }
+
+  const mapH = map.value.height
+  const mapW = map.value.width
+
+  // Диапазон в метрах, видимый на экране
+  const leftU = -offset.value.x / s
+  const rightU = (stageW - offset.value.x) / s
+  const topV = -offset.value.y / s
+  const botV = (stageH - offset.value.y) / s
+
+  const leftMet = pixelToWorld(meta, Math.max(0, leftU), 0, mapH)
+  const rightMet = pixelToWorld(meta, Math.min(mapW, rightU), 0, mapH)
+  const topMet = pixelToWorld(meta, 0, Math.max(0, topV), mapH)
+  const botMet = pixelToWorld(meta, 0, Math.min(mapH, botV), mapH)
+
+  const xStart = Math.ceil(leftMet.x / step) * step
+  const xEnd = Math.floor(rightMet.x / step) * step
+  const yStart = Math.ceil(botMet.y / step) * step
+  const yEnd = Math.floor(topMet.y / step) * step
+
+  const originU = -meta.origin[0] / meta.resolution
+  const originV = mapH + meta.origin[1] / meta.resolution
+
+  for (let x = xStart; x <= xEnd; x += step) {
+    const u = (x - meta.origin[0]) / meta.resolution
+    const px = offset.value.x + u * s
+    const major = Math.round(x / step) % 5 === 0
+    gridLayer.add(
+      new konva.Line({
+        points: [px, 0, px, stageH],
+        stroke: major ? '#1e40af' : '#94a3b8',
+        strokeWidth: major ? 1 : 0.5,
+        opacity: major ? 0.35 : 0.25,
+      })
+    )
+    gridLayer.add(
+      new konva.Text({
+        x: px + 2,
+        y: 4,
+        text: `${x.toFixed(step < 1 ? 2 : 0)}`,
+        fontSize: 10,
+        fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+        fill: '#1e40af',
+        opacity: 0.75,
+      })
+    )
+  }
+
+  for (let y = yStart; y <= yEnd; y += step) {
+    const v = mapH - (y - meta.origin[1]) / meta.resolution
+    const py = offset.value.y + v * s
+    const major = Math.round(y / step) % 5 === 0
+    gridLayer.add(
+      new konva.Line({
+        points: [0, py, stageW, py],
+        stroke: major ? '#1e40af' : '#94a3b8',
+        strokeWidth: major ? 1 : 0.5,
+        opacity: major ? 0.35 : 0.25,
+      })
+    )
+    gridLayer.add(
+      new konva.Text({
+        x: 4,
+        y: py + 2,
+        text: `${y.toFixed(step < 1 ? 2 : 0)}`,
+        fontSize: 10,
+        fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+        fill: '#1e40af',
+        opacity: 0.75,
+      })
+    )
+  }
+
+  gridLayer.batchDraw()
 }
 
 function redraw() {
@@ -282,6 +408,22 @@ function redraw() {
   for (const w of map.value.waypoints) {
     const p = fromImagePx(w.u, w.v)
     const isSelected = selectedId.value === w.id
+    const isLast = lastWaypoint?.id === w.id && tool.value === 'route'
+
+    if (isLast) {
+      drawLayer.add(
+        new konva.Circle({
+          x: p.x,
+          y: p.y,
+          radius: 12,
+          stroke: '#22c55e',
+          strokeWidth: 2,
+          dash: [3, 3],
+          listening: false,
+        })
+      )
+    }
+
     const circle = new konva.Circle({
       x: p.x,
       y: p.y,
@@ -290,28 +432,20 @@ function redraw() {
       stroke: 'white',
       strokeWidth: 2,
       draggable: tool.value === 'select',
+      wpId: w.id,
     })
     circle.on('click', (e) => {
       e.cancelBubble = true
       if (tool.value === 'select') {
         selectedId.value = w.id
         redraw()
-      } else if (tool.value === 'edge') {
-        if (!currentEdgeStart) {
-          currentEdgeStart = w
-          msg.info(`Edge from ${w.id} — click target waypoint`)
-        } else if (currentEdgeStart.id !== w.id) {
-          const edge = {
-            id: 'ed-' + Math.random().toString(36).slice(2, 6),
-            from: currentEdgeStart.id,
-            to: w.id,
-            cost: 0,
-            maxSpeed: 1.0,
-          }
-          store.update(map.value.id, { edges: [...map.value.edges, edge] })
-          currentEdgeStart = null
-          redraw()
+      } else if (tool.value === 'route') {
+        // Клик на существующей ноде — присоединить цепочку
+        if (lastWaypoint && lastWaypoint.id !== w.id) {
+          addEdge(lastWaypoint.id, w.id)
         }
+        lastWaypoint = w
+        redraw()
       }
     })
     circle.on('dragmove', () => {
@@ -321,7 +455,7 @@ function redraw() {
       const v = (ny - offset.value.y) / scale.value
       const updated = map.value.waypoints.map((x) => (x.id === w.id ? { ...x, u, v } : x))
       store.update(map.value.id, { waypoints: updated })
-      redrawEdgesOnly()
+      redraw()
     })
     drawLayer.add(circle)
     drawLayer.add(
@@ -340,24 +474,25 @@ function redraw() {
   drawLayer.batchDraw()
 }
 
-function redrawEdgesOnly() {
-  redraw()
-}
-
 function clearAll() {
   if (!confirm('Delete all waypoints, edges and zones?')) return
   store.update(map.value.id, { waypoints: [], edges: [], zones: [] })
-  currentEdgeStart = null
+  lastWaypoint = null
   zoneDraft = null
   selectedId.value = null
   redraw()
   msg.info('Cleared')
 }
 
+function endChain() {
+  lastWaypoint = null
+  redraw()
+  msg.info('Chain ended — next click starts a new route')
+}
+
 function saveToBackend() {
   msg.success(`Saved (mock). Backend: POST /api/maps/${map.value.id}`)
 }
-
 function doExportGeoJson() {
   const geo = exportNav2GeoJson(map.value)
   downloadJson(`${map.value.name.replace(/\s+/g, '_')}.geojson`, geo)
@@ -384,13 +519,11 @@ function toggleRobot(id) {
     ? map.value.assignedRobots.filter((x) => x !== id)
     : [...map.value.assignedRobots, id]
   store.assignRobots(map.value.id, assigned)
-  msg.info(`Assigned robots: ${assigned.join(', ') || '(none)'}`)
 }
 
 const tools = [
+  { key: 'route', label: 'Draw route', hint: 'Click on the map to drop a waypoint. Each new click adds the next waypoint and connects it to the previous one. Click an existing point to join it. Enter/Escape ends the chain.' },
   { key: 'select', label: 'Select / move', hint: 'Click element to select. Drag waypoint to move. Del to remove.' },
-  { key: 'waypoint', label: 'Waypoint', hint: 'Click to add a waypoint.' },
-  { key: 'edge', label: 'Edge / route', hint: 'Click two waypoints to connect.' },
   { key: 'zone-forbidden', label: 'Forbidden zone', hint: 'Click two corners.' },
   { key: 'zone-charge', label: 'Charge zone', hint: 'Click two corners.' },
   { key: 'zone-loading', label: 'Loading zone', hint: 'Click two corners.' },
@@ -430,7 +563,7 @@ function updateEdgeSpeed(v) {
 }
 
 watch(tool, () => {
-  currentEdgeStart = null
+  lastWaypoint = null
   zoneDraft = null
   redraw()
 })
@@ -473,8 +606,13 @@ watch(tool, () => {
             {{ t.label }}
           </button>
         </div>
-        <div class="mt-4 rounded bg-slate-50 p-3 text-xs text-slate-600">
+        <div class="mt-4 rounded bg-brand-50 p-3 text-xs text-brand-900">
           {{ tools.find(t => t.key === tool)?.hint }}
+        </div>
+
+        <div v-if="tool === 'route' && lastWaypoint" class="mt-2 flex items-center justify-between rounded bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          <span>Chain from <span class="font-mono">{{ lastWaypoint.id }}</span></span>
+          <button class="rounded bg-emerald-800 px-2 py-0.5 text-white hover:bg-emerald-900" @click="endChain">End</button>
         </div>
 
         <div class="mt-4">
@@ -510,11 +648,11 @@ watch(tool, () => {
       </NCard>
 
       <NCard title="Canvas" size="small" class="!bg-white lg:col-span-3">
-        <div ref="stageEl" class="h-[640px] w-full overflow-hidden rounded border border-slate-200 bg-slate-100" />
+        <div ref="stageEl" class="h-[640px] w-full overflow-hidden rounded border border-slate-200 bg-white" />
       </NCard>
 
       <NCard title="Selected" size="small" class="!bg-white lg:col-span-1">
-        <div v-if="!selectedInfo" class="text-xs text-slate-500">Select an element on the canvas.</div>
+        <div v-if="!selectedInfo" class="text-xs text-slate-500">Select an element on the canvas (Select tool).</div>
 
         <div v-else-if="selectedInfo.kind === 'waypoint'" class="flex flex-col gap-2 text-sm">
           <div class="flex justify-between"><span class="text-slate-500">Type</span><span class="font-mono text-xs">Waypoint</span></div>

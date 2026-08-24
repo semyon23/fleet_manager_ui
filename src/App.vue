@@ -1,20 +1,17 @@
 <script setup>
-import { NConfigProvider, NMessageProvider, darkTheme } from 'naive-ui'
+import { NConfigProvider, NMessageProvider } from 'naive-ui'
 import AppSidebar from './components/AppSidebar.vue'
 import AppTopbar from './components/AppTopbar.vue'
-import { ref } from 'vue'
-
-const isDark = ref(false)
 </script>
 
 <template>
-  <NConfigProvider :theme="isDark ? darkTheme : null" :theme-overrides="themeOverrides">
+  <NConfigProvider :theme-overrides="themeOverrides">
     <NMessageProvider>
       <div class="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900">
         <AppSidebar />
         <div class="flex flex-1 flex-col overflow-hidden">
-          <AppTopbar v-model:dark="isDark" />
-          <main class="flex-1 overflow-auto p-6">
+          <AppTopbar />
+          <main class="flex-1 overflow-auto bg-slate-50 p-6">
             <RouterView />
           </main>
         </div>
