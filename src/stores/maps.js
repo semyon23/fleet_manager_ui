@@ -7,7 +7,13 @@ function loadFromStorage() {
   try {
     const raw = localStorage.getItem(LS_KEY)
     if (!raw) return []
-    return JSON.parse(raw)
+    const list = JSON.parse(raw)
+    // Миграции: гарантируем новые поля на старых записях
+    return list.map((m) => ({
+      stations: [],
+      zones: [],
+      ...m,
+    }))
   } catch {
     return []
   }
@@ -45,6 +51,7 @@ export const useMapsStore = defineStore('maps', () => {
       waypoints: [],
       edges: [],
       zones: [],
+      stations: [],
       assignedRobots: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

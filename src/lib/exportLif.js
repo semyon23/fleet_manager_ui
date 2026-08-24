@@ -45,6 +45,21 @@ export function exportLif(map) {
     ],
   }))
 
+  const stations = (map.stations || []).map((s) => {
+    const { x, y } = pixelToWorld(meta, s.u, s.v, h)
+    return {
+      stationId: s.id,
+      stationName: s.name || s.id,
+      stationDescription: s.kind || '',
+      interactionNodeIds: s.interactionNodeIds || [],
+      stationPosition: {
+        x: Number(x.toFixed(4)),
+        y: Number(y.toFixed(4)),
+        theta: 0,
+      },
+    }
+  })
+
   return {
     metaInformation: {
       projectIdentification: 'fleet-manager',
@@ -62,7 +77,7 @@ export function exportLif(map) {
         layoutDescription: `Exported from Fleet Manager. PGM ${map.width}x${map.height} @ ${meta.resolution} m/px, origin ${meta.origin.join(',')}.`,
         nodes,
         edges,
-        stations: [],
+        stations,
       },
     ],
   }

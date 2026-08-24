@@ -7,7 +7,7 @@ import { pixelToWorld } from '../lib/nav2meta'
 import { exportNav2GeoJson, downloadJson } from '../lib/exportGeoJson'
 import { exportLif } from '../lib/exportLif'
 import { graphConfigs } from '../lib/graphConfig'
-import { NCard, NButton, NPopselect, NInput, useMessage } from 'naive-ui'
+import { NCard, NButton, NPopselect, NInput, NSelect, NModal, NTabs, NTabPane, useMessage } from 'naive-ui'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,10 +26,62 @@ const selectedEdges = ref([])
 
 const graph = ref(null)
 
-const tool = ref('create-node') // 'create-node' | 'select'
+const tool = ref('create-node') // 'create-node' | 'create-station' | 'select'
+
+const STATION_KINDS = [
+  { label: 'Charge', value: 'charge', color: '#eab308' },
+  { label: 'Loading', value: 'loading', color: '#f97316' },
+  { label: 'Parking', value: 'parking', color: '#8b5cf6' },
+  { label: 'Custom', value: 'custom', color: '#0ea5e9' },
+]
+const nextStationKind = ref('charge')
+
+function stationColorFor(kind) {
+  return STATION_KINDS.find((k) => k.value === kind)?.color || '#0ea5e9'
+}
 const showGrid = ref(true)
 const showLabels = ref(true)
+const showNodes = ref(true)
+const showEdges = ref(true)
 const gridInterval = ref(1)
+
+const showPreview = ref(false)
+const previewTab = ref('geojson')
+
+const previewGeoJson = computed(() => {
+  if (!map.value) return ''
+  try {
+    return JSON.stringify(exportNav2GeoJson(map.value), null, 2)
+  } catch (e) {
+    return `// error: ${e.message}`
+  }
+})
+const previewLif = computed(() => {
+  if (!map.value) return ''
+  try {
+    return JSON.stringify(exportLif(map.value), null, 2)
+  } catch (e) {
+    return `// error: ${e.message}`
+  }
+})
+
+async function copyToClipboard(text, label) {
+  try {
+    await navigator.clipboard.writeText(text)
+    msg.success(`${label} copied to clipboard`)
+  } catch {
+    msg.error('Clipboard access denied')
+  }
+}
+
+const allMapsOptions = computed(() =>
+  store.maps.map((m) => ({ label: m.name, value: m.id }))
+)
+function switchMap(id) {
+  if (id && id !== map.value?.id) {
+    router.replace({ name: 'map-editor', params: { id } })
+  }
+}
 
 // История для undo/redo (snapshots waypoints+edges)
 const history = ref([])
@@ -78,9 +130,7 @@ function syncFromStore() {
   const nodeIds = new Set(map.value.waypoints.map((w) => w.id))
   const edgeIds = new Set(map.value.edges.map((e) => e.id))
 
-  // Удаляем то что пропало
-  for (const id of Object.keys(nodes)) if (!nodeIds.has(id)) delete nodes[id]
-  for (const id of Object.keys(layouts.nodes)) if (!nodeIds.has(id)) delete layouts.nodes[id]
+  // Удаляем edges которых больше нет
   for (const id of Object.keys(edges)) if (!edgeIds.has(id)) delete edges[id]
 
   // Добавляем/обновляем waypoints
@@ -90,6 +140,8 @@ function syncFromStore() {
       name: wp.id,
       x: world.x,
       y: world.y,
+      __kind: 'waypoint',
+      color: '#1e40af',
     }
     if (!layouts.nodes[wp.id]) {
       layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
@@ -98,6 +150,28 @@ function syncFromStore() {
       layouts.nodes[wp.id].y = wp.v
     }
   }
+  // Добавляем/обновляем stations (тоже как ноды в графе, но с прямоугольной формой)
+  const stations = map.value.stations || []
+  const stationIds = new Set(stations.map((s) => s.id))
+  for (const s of stations) {
+    nodes[s.id] = {
+      name: s.name || s.id,
+      __kind: 'station',
+      __stationKind: s.kind,
+      color: stationColorFor(s.kind),
+    }
+    if (!layouts.nodes[s.id]) {
+      layouts.nodes[s.id] = { x: s.u, y: s.v }
+    } else {
+      layouts.nodes[s.id].x = s.u
+      layouts.nodes[s.id].y = s.v
+    }
+  }
+  // Удаляем ноды/лейауты для станций, которых больше нет
+  const allValidIds = new Set([...nodeIds, ...stationIds])
+  for (const id of Object.keys(nodes)) if (!allValidIds.has(id)) delete nodes[id]
+  for (const id of Object.keys(layouts.nodes)) if (!allValidIds.has(id)) delete layouts.nodes[id]
+
   // Добавляем/обновляем edges
   for (const e of map.value.edges) {
     edges[e.id] = {
@@ -113,35 +187,52 @@ function syncFromStore() {
 // Пересчёт store при drag ноды (layouts обновляются самим v-network-graph)
 function onNodeDragEnd() {
   if (!map.value) return
-  const updated = map.value.waypoints.map((wp) => {
+  const updatedW = map.value.waypoints.map((wp) => {
     const lp = layouts.nodes[wp.id]
     if (!lp) return wp
     return { ...wp, u: lp.x, v: lp.y }
   })
-  store.update(map.value.id, { waypoints: updated })
+  const updatedS = (map.value.stations || []).map((s) => {
+    const lp = layouts.nodes[s.id]
+    if (!lp) return s
+    return { ...s, u: lp.x, v: lp.y }
+  })
+  store.update(map.value.id, { waypoints: updatedW, stations: updatedS })
   pushHistory()
 }
 
-// Клик по пустому месту view — в режиме create-node создаём waypoint
+// Клик по пустому месту view — в режиме create-node/create-station создаём точку
 function onViewClick(evt) {
-  if (tool.value !== 'create-node') return
+  if (tool.value !== 'create-node' && tool.value !== 'create-station') return
   if (!map.value) return
 
-  // v-network-graph отдаёт event с координатами в graph-space
   const pos = evt.point || (graph.value?.eventOffsetToSvg?.(evt.event) ?? null)
   if (!pos) return
+  const u = pos.x, v = pos.y
+  if (u < 0 || v < 0 || u > map.value.width || v > map.value.height) return
 
-  const u = pos.x
-  const v = pos.y
+  if (tool.value === 'create-station') {
+    const id = 'st-' + Math.random().toString(36).slice(2, 6)
+    const station = {
+      id,
+      name: id,
+      kind: nextStationKind.value,
+      u,
+      v,
+      interactionNodeIds: [],
+    }
+    store.update(map.value.id, {
+      stations: [...(map.value.stations || []), station],
+    })
+    syncFromStore()
+    selectedNodes.value = [id]
+    pushHistory()
+    return
+  }
 
-  const w = map.value.width
-  const h = map.value.height
-  if (u < 0 || v < 0 || u > w || v > h) return
-
+  // create-node
   const id = 'wp-' + Math.random().toString(36).slice(2, 6)
   const wp = { id, u, v }
-
-  // Если есть ровно одна выделенная нода — тянем edge от неё к новой (fast-chain)
   let newEdges = map.value.edges
   if (selectedNodes.value.length === 1) {
     const fromId = selectedNodes.value[0]
@@ -202,10 +293,11 @@ function deleteSelected() {
   const edgeIds = new Set(selectedEdges.value)
   if (!nodeIds.size && !edgeIds.size) return
   const waypoints = map.value.waypoints.filter((w) => !nodeIds.has(w.id))
+  const stationsLeft = (map.value.stations || []).filter((s) => !nodeIds.has(s.id))
   const edgesLeft = map.value.edges.filter(
     (e) => !edgeIds.has(e.id) && !nodeIds.has(e.from) && !nodeIds.has(e.to)
   )
-  store.update(map.value.id, { waypoints, edges: edgesLeft })
+  store.update(map.value.id, { waypoints, edges: edgesLeft, stations: stationsLeft })
   selectedNodes.value = []
   selectedEdges.value = []
   syncFromStore()
@@ -235,15 +327,22 @@ const dynamicConfig = computed(() => ({
   },
   node: {
     ...graphConfigs.node,
+    normal: {
+      ...graphConfigs.node.normal,
+      type: (n) => (n.__kind === 'station' ? 'rect' : 'circle'),
+      color: (n) => n.color || '#1e40af',
+      radius: (n) => (n.__kind === 'station' ? 14 : 12),
+      width: (n) => (n.__kind === 'station' ? 28 : 24),
+      height: (n) => (n.__kind === 'station' ? 28 : 24),
+      borderRadius: (n) => (n.__kind === 'station' ? 4 : undefined),
+    },
+    hover: {
+      ...graphConfigs.node.hover,
+      color: (n) => (n.__kind === 'station' ? n.color : '#3b82f6'),
+    },
     label: {
       ...graphConfigs.node.label,
       visible: showLabels.value,
-    },
-    normal: {
-      ...graphConfigs.node.normal,
-      color: (n) => {
-        return selectedNodes.value.includes(n.__id) ? '#f97316' : '#1e40af'
-      },
     },
   },
   edge: {
@@ -254,6 +353,9 @@ const dynamicConfig = computed(() => ({
     },
   },
 }))
+
+const visibleNodes = computed(() => (showNodes.value ? nodes : {}))
+const visibleEdges = computed(() => (showEdges.value ? edges : {}))
 
 const eventHandlers = {
   'view:click': onViewClick,
@@ -335,10 +437,35 @@ const selectedNode = computed(() => {
   if (selectedNodes.value.length !== 1 || !map.value) return null
   return map.value.waypoints.find((w) => w.id === selectedNodes.value[0]) || null
 })
+const selectedStation = computed(() => {
+  if (selectedNodes.value.length !== 1 || !map.value) return null
+  return (map.value.stations || []).find((s) => s.id === selectedNodes.value[0]) || null
+})
 const selectedNodeWorld = computed(() => {
   if (!selectedNode.value || !map.value) return null
   return pixelToWorld(map.value.meta, selectedNode.value.u, selectedNode.value.v, map.value.height)
 })
+const selectedStationWorld = computed(() => {
+  if (!selectedStation.value || !map.value) return null
+  return pixelToWorld(map.value.meta, selectedStation.value.u, selectedStation.value.v, map.value.height)
+})
+
+function updateStationKind(kind) {
+  if (!selectedStation.value) return
+  const list = (map.value.stations || []).map((s) =>
+    s.id === selectedStation.value.id ? { ...s, kind } : s
+  )
+  store.update(map.value.id, { stations: list })
+  syncFromStore()
+}
+function updateStationName(name) {
+  if (!selectedStation.value) return
+  const list = (map.value.stations || []).map((s) =>
+    s.id === selectedStation.value.id ? { ...s, name } : s
+  )
+  store.update(map.value.id, { stations: list })
+  syncFromStore()
+}
 
 function updateEdgeCost(v) {
   if (!selectedEdge.value) return
@@ -386,18 +513,32 @@ function toggleRobot(id) {
 <template>
   <div v-if="!map" class="grid place-items-center py-20 text-slate-500">Loading map…</div>
   <div v-else class="flex flex-col gap-4">
-    <div class="flex items-center justify-between">
-      <div class="flex items-baseline gap-3">
-        <h2 class="text-xl font-semibold text-slate-900">{{ map.name }}</h2>
-        <span class="font-mono text-xs text-slate-500">
-          {{ map.id }} · {{ map.width }}×{{ map.height }}px · {{ map.meta.resolution }} m/px · origin ({{ map.meta.origin[0] }}, {{ map.meta.origin[1] }})
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-3">
+        <NButton size="small" @click="router.push({ name: 'maps' })">←</NButton>
+        <NSelect
+          size="small"
+          :value="map.id"
+          :options="allMapsOptions"
+          style="width: 260px"
+          @update:value="switchMap"
+        />
+        <span class="font-mono text-[10px] text-slate-500">
+          {{ map.width }}×{{ map.height }} · {{ map.meta.resolution }} m/px · origin ({{ map.meta.origin[0] }}, {{ map.meta.origin[1] }})
         </span>
       </div>
-      <div class="flex gap-2">
-        <NButton size="small" @click="router.push({ name: 'maps' })">← Back</NButton>
-        <NButton size="small" :disabled="historyIdx <= 0" @click="undo" title="Ctrl+Z">↶ Undo</NButton>
-        <NButton size="small" :disabled="historyIdx >= history.length - 1" @click="redo" title="Ctrl+Y">↷ Redo</NButton>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="flex items-center gap-3 rounded border border-slate-200 px-3 py-1 text-xs text-slate-600">
+          <label class="flex cursor-pointer items-center gap-1"><input type="checkbox" v-model="showNodes" /> Nodes</label>
+          <label class="flex cursor-pointer items-center gap-1"><input type="checkbox" v-model="showEdges" /> Edges</label>
+          <label class="flex cursor-pointer items-center gap-1"><input type="checkbox" v-model="showLabels" /> Labels</label>
+          <label class="flex cursor-pointer items-center gap-1"><input type="checkbox" v-model="showGrid" /> Grid</label>
+        </div>
+        <NButton size="small" :disabled="historyIdx <= 0" @click="undo" title="Ctrl+Z">↶</NButton>
+        <NButton size="small" :disabled="historyIdx >= history.length - 1" @click="redo" title="Ctrl+Y">↷</NButton>
         <NButton size="small" ghost @click="clearAll">Clear</NButton>
+        <NButton size="small" @click="showPreview = true">Preview JSON</NButton>
         <NPopselect :options="exportOptions" @update:value="onExport" trigger="click">
           <NButton size="small" type="primary" ghost>Export ▾</NButton>
         </NPopselect>
@@ -420,6 +561,15 @@ function toggleRobot(id) {
           <button
             :class="[
               'rounded border px-3 py-2 text-left text-sm transition',
+              tool === 'create-station'
+                ? 'border-brand-800 bg-brand-800 text-white'
+                : 'border-slate-200 hover:bg-brand-50',
+            ]"
+            @click="tool = 'create-station'; selectedNodes = []"
+          >Create Station</button>
+          <button
+            :class="[
+              'rounded border px-3 py-2 text-left text-sm transition',
               tool === 'select'
                 ? 'border-brand-800 bg-brand-800 text-white'
                 : 'border-slate-200 hover:bg-brand-50',
@@ -432,18 +582,34 @@ function toggleRobot(id) {
           <template v-if="tool === 'create-node'">
             Click on the map to add a node. If a node is selected, the new node connects to it — draw routes fast.
           </template>
+          <template v-else-if="tool === 'create-station'">
+            Click on the map to drop a station of selected kind. Stations export as VDA5050 stations (with interactionNodeIds).
+          </template>
           <template v-else>
             Click a node/edge to select. Drag nodes to move. Del to remove. Ctrl+Z / Ctrl+Y for undo/redo.
           </template>
         </div>
 
-        <div class="mt-4">
-          <div class="mb-1 flex items-center justify-between text-xs uppercase tracking-wider text-slate-500">
-            <span>Grid</span>
-            <label class="flex items-center gap-1 normal-case text-[10px]">
-              <input type="checkbox" v-model="showGrid" /> show
-            </label>
+        <div v-if="tool === 'create-station'" class="mt-3">
+          <div class="mb-1 text-xs uppercase tracking-wider text-slate-500">Station kind</div>
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="k in STATION_KINDS"
+              :key="k.value"
+              :class="[
+                'rounded border px-2 py-1 text-xs transition',
+                nextStationKind === k.value
+                  ? 'border-slate-800 bg-slate-800 text-white'
+                  : 'border-slate-200 hover:bg-slate-50',
+              ]"
+              :style="nextStationKind === k.value ? '' : `border-color: ${k.color}; color: ${k.color}`"
+              @click="nextStationKind = k.value"
+            >{{ k.label }}</button>
           </div>
+        </div>
+
+        <div class="mt-4">
+          <div class="mb-1 text-xs uppercase tracking-wider text-slate-500">Grid step</div>
           <input
             type="range"
             min="0.1"
@@ -454,12 +620,6 @@ function toggleRobot(id) {
             :disabled="!showGrid"
           />
           <div class="text-right font-mono text-[10px] text-slate-500">{{ gridInterval }} m</div>
-        </div>
-
-        <div class="mt-3">
-          <label class="flex items-center gap-2 text-xs text-slate-600">
-            <input type="checkbox" v-model="showLabels" /> Show labels
-          </label>
         </div>
 
         <div class="mt-4">
@@ -481,6 +641,7 @@ function toggleRobot(id) {
 
         <div class="mt-4 flex flex-col gap-1 font-mono text-xs text-slate-500">
           <div>Nodes: <span class="text-brand-800">{{ map.waypoints.length }}</span></div>
+          <div>Stations: <span class="text-brand-800">{{ (map.stations || []).length }}</span></div>
           <div>Edges: <span class="text-brand-800">{{ map.edges.length }}</span></div>
         </div>
       </NCard>
@@ -489,8 +650,8 @@ function toggleRobot(id) {
         <div class="h-[640px] w-full overflow-hidden rounded border border-slate-200 bg-white">
           <v-network-graph
             ref="graph"
-            :nodes="nodes"
-            :edges="edges"
+            :nodes="visibleNodes"
+            :edges="visibleEdges"
             v-model:layouts="layouts"
             v-model:selected-nodes="selectedNodes"
             v-model:selected-edges="selectedEdges"
@@ -514,8 +675,8 @@ function toggleRobot(id) {
       </NCard>
 
       <NCard title="Properties" size="small" class="!bg-white lg:col-span-1">
-        <div v-if="!selectedNode && !selectedEdge" class="text-xs text-slate-500">
-          Select a node or edge to edit its properties.
+        <div v-if="!selectedNode && !selectedEdge && !selectedStation" class="text-xs text-slate-500">
+          Select a node, station or edge to edit its properties.
         </div>
 
         <div v-if="selectedNode" class="flex flex-col gap-2 text-sm">
@@ -531,6 +692,40 @@ function toggleRobot(id) {
           </label>
           <div class="flex justify-between"><span class="text-slate-500">X</span><span class="font-mono text-xs">{{ selectedNodeWorld.x.toFixed(3) }} m</span></div>
           <div class="flex justify-between"><span class="text-slate-500">Y</span><span class="font-mono text-xs">{{ selectedNodeWorld.y.toFixed(3) }} m</span></div>
+          <NButton size="small" type="error" ghost @click="deleteSelected">Delete</NButton>
+        </div>
+
+        <div v-if="selectedStation" class="flex flex-col gap-2 text-sm">
+          <div class="text-xs uppercase tracking-wider text-slate-500">Station</div>
+          <label class="text-xs text-slate-500">
+            Name
+            <NInput
+              size="small"
+              :value="selectedStation.name || selectedStation.id"
+              @update:value="updateStationName"
+              class="mt-1"
+            />
+          </label>
+          <div class="flex justify-between"><span class="text-slate-500">ID</span><span class="font-mono text-xs text-brand-800">{{ selectedStation.id }}</span></div>
+          <div class="text-xs text-slate-500">
+            Kind
+            <div class="mt-1 flex flex-wrap gap-1">
+              <button
+                v-for="k in STATION_KINDS"
+                :key="k.value"
+                :class="[
+                  'rounded border px-2 py-1 text-xs transition',
+                  selectedStation.kind === k.value
+                    ? 'border-slate-800 bg-slate-800 text-white'
+                    : 'border-slate-200 hover:bg-slate-50',
+                ]"
+                :style="selectedStation.kind === k.value ? '' : `border-color: ${k.color}; color: ${k.color}`"
+                @click="updateStationKind(k.value)"
+              >{{ k.label }}</button>
+            </div>
+          </div>
+          <div class="flex justify-between"><span class="text-slate-500">X</span><span class="font-mono text-xs">{{ selectedStationWorld.x.toFixed(3) }} m</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Y</span><span class="font-mono text-xs">{{ selectedStationWorld.y.toFixed(3) }} m</span></div>
           <NButton size="small" type="error" ghost @click="deleteSelected">Delete</NButton>
         </div>
 
@@ -561,5 +756,31 @@ function toggleRobot(id) {
         </div>
       </NCard>
     </div>
+
+    <NModal
+      v-model:show="showPreview"
+      preset="card"
+      title="Export preview"
+      style="width: 90vw; max-width: 900px"
+      :bordered="false"
+      :segmented="{ content: 'soft' }"
+    >
+      <NTabs v-model:value="previewTab" type="line">
+        <NTabPane name="geojson" tab="Nav2 GeoJSON (Route Server)">
+          <div class="mb-2 flex justify-end gap-2">
+            <NButton size="tiny" @click="copyToClipboard(previewGeoJson, 'GeoJSON')">Copy</NButton>
+            <NButton size="tiny" type="primary" @click="doExportGeoJson">Download</NButton>
+          </div>
+          <pre class="max-h-[60vh] overflow-auto rounded bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-emerald-200">{{ previewGeoJson }}</pre>
+        </NTabPane>
+        <NTabPane name="lif" tab="VDA5050 LIF 1.0.0">
+          <div class="mb-2 flex justify-end gap-2">
+            <NButton size="tiny" @click="copyToClipboard(previewLif, 'LIF')">Copy</NButton>
+            <NButton size="tiny" type="primary" @click="doExportLif">Download</NButton>
+          </div>
+          <pre class="max-h-[60vh] overflow-auto rounded bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-sky-200">{{ previewLif }}</pre>
+        </NTabPane>
+      </NTabs>
+    </NModal>
   </div>
 </template>
