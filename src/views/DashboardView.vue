@@ -2,7 +2,7 @@
 import { useRobotsStore } from '../stores/robots'
 import { NCard, NDataTable } from 'naive-ui'
 import { computed, h } from 'vue'
-import { previewSpriteFor } from '../lib/robotSprite'
+import { previewSpriteFor, tintStyle } from '../lib/robotSprite'
 
 const store = useRobotsStore()
 
@@ -54,7 +54,7 @@ const columns = [
               :src="previewSpriteFor(r)"
               :alt="r.id"
               class="h-8 w-8 object-contain"
-              :style="r.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : ''"
+              :style="tintStyle(r.status)"
             />
             <span class="flex-1 font-mono text-xs text-brand-800">{{ r.id }}</span>
             <span class="w-16 text-xs text-slate-500">{{ r.status }}</span>

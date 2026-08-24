@@ -1,15 +1,59 @@
 <script setup>
-import { NCard, NDataTable, NTag } from 'naive-ui'
+import { ref } from 'vue'
+import { NCard, NDataTable, NTag, NButton, NModal, NInput, NSelect, useMessage } from 'naive-ui'
 import { h } from 'vue'
+import { useRobotsStore } from '../stores/robots'
+import { useMapsStore } from '../stores/maps'
 
-const missions = [
+const robots = useRobotsStore()
+const maps = useMapsStore()
+const msg = useMessage()
+
+const missions = ref([
   { id: 'M-107', robot: 'amr-04', from: 'A-12', to: 'B-04', progress: 65, state: 'running' },
   { id: 'M-104', robot: 'amr-01', from: 'CH-01', to: 'A-03', progress: 40, state: 'running' },
   { id: 'M-103', robot: 'amr-03', from: 'B-08', to: 'CH-02', progress: 100, state: 'completed' },
   { id: 'M-102', robot: 'amr-02', from: 'A-01', to: 'B-11', progress: 12, state: 'failed' },
-]
+])
 
 const stateColor = { running: '#22c55e', completed: '#3b82f6', failed: '#ef4444', queued: '#94a3b8' }
+
+const showModal = ref(false)
+const form = ref({ robot: null, mapId: null, from: '', to: '', priority: 'normal' })
+
+function openCreate() {
+  form.value = { robot: null, mapId: maps.maps[0]?.id || null, from: '', to: '', priority: 'normal' }
+  showModal.value = true
+}
+
+function submit() {
+  if (!form.value.robot) return msg.error('Select a robot')
+  if (!form.value.from || !form.value.to) return msg.error('Set from and to waypoints')
+  const nextId = 'M-' + String(Math.floor(Math.random() * 900) + 110)
+  missions.value.unshift({
+    id: nextId,
+    robot: form.value.robot,
+    from: form.value.from,
+    to: form.value.to,
+    progress: 0,
+    state: 'queued',
+  })
+  msg.success(`Mission ${nextId} queued (mock — backend will dispatch via VDA5050 Order)`)
+  showModal.value = false
+}
+
+const robotOptions = robots.robots
+  .filter((r) => r.status !== 'offline' && r.status !== 'error')
+  .map((r) => ({ label: `${r.id} · ${r.status} · ${r.battery}%`, value: r.id }))
+
+const mapOptions = maps.maps.map((m) => ({ label: m.name, value: m.id }))
+
+const priorityOptions = [
+  { label: 'Low', value: 'low' },
+  { label: 'Normal', value: 'normal' },
+  { label: 'High', value: 'high' },
+  { label: 'Critical', value: 'critical' },
+]
 
 const columns = [
   { title: 'Mission', key: 'id', render: (m) => h('span', { class: 'font-mono text-brand-800' }, m.id) },
@@ -36,10 +80,76 @@ const columns = [
 </script>
 
 <template>
-  <NCard title="Missions (view-only — controlled by backend)" size="small" class="!bg-white">
+  <NCard title="Missions" size="small" class="!bg-white">
+    <template #header-extra>
+      <NButton type="primary" size="small" @click="openCreate">+ Create mission</NButton>
+    </template>
+
     <NDataTable :columns="columns" :data="missions" :bordered="false" />
+
     <div class="mt-4 rounded bg-slate-50 p-3 text-xs text-slate-600">
-      Missions are dispatched by the backend via VDA5050 Order messages. This view is read-only telemetry.
+      Missions are dispatched by the backend via VDA5050 Order messages. This view mostly renders read-only telemetry;
+      "Create mission" queues an order on the backend (mock).
     </div>
+
+    <NModal
+      v-model:show="showModal"
+      preset="card"
+      title="Create mission"
+      style="width: 480px"
+      :bordered="false"
+      :segmented="{ content: 'soft' }"
+    >
+      <div class="flex flex-col gap-4">
+        <label class="text-sm text-slate-600">
+          Robot
+          <NSelect
+            v-model:value="form.robot"
+            :options="robotOptions"
+            placeholder="Select a robot"
+            size="medium"
+            class="mt-1"
+          />
+        </label>
+
+        <label class="text-sm text-slate-600">
+          Map
+          <NSelect
+            v-model:value="form.mapId"
+            :options="mapOptions"
+            placeholder="Which map / floor"
+            size="medium"
+            class="mt-1"
+          />
+        </label>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="text-sm text-slate-600">
+            From waypoint
+            <NInput v-model:value="form.from" placeholder="wp-a1" class="mt-1" />
+          </label>
+          <label class="text-sm text-slate-600">
+            To waypoint
+            <NInput v-model:value="form.to" placeholder="wp-b4" class="mt-1" />
+          </label>
+        </div>
+
+        <label class="text-sm text-slate-600">
+          Priority
+          <NSelect v-model:value="form.priority" :options="priorityOptions" size="medium" class="mt-1" />
+        </label>
+
+        <div class="rounded bg-slate-50 p-3 text-xs text-slate-600">
+          On submit — mock only. Real dispatch will POST /api/missions and reach the robot via VDA5050 Order.
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton @click="showModal = false">Cancel</NButton>
+          <NButton type="primary" @click="submit">Queue mission</NButton>
+        </div>
+      </template>
+    </NModal>
   </NCard>
 </template>

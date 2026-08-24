@@ -37,3 +37,24 @@ export function previewSpriteFor(robot) {
   if (robot.sprites) return robot.sprites.top || robot.sprites.n || robot.sprite
   return robot.sprite || null
 }
+
+/**
+ * CSS-filter для тонирования png-спрайта в цвет статуса (для <img> вне SVG).
+ * Синие подсветки → цвет статуса.
+ */
+export function tintStyle(status) {
+  switch (status) {
+    case 'moving':
+      return 'filter: hue-rotate(-120deg)'
+    case 'charging':
+      return 'filter: hue-rotate(-160deg)'
+    case 'error':
+      return 'filter: hue-rotate(140deg)'
+    case 'idle':
+      return 'filter: saturate(0.15)'
+    case 'offline':
+      return 'filter: grayscale(1) opacity(0.5)'
+    default:
+      return ''
+  }
+}

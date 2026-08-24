@@ -2,7 +2,7 @@
 import { useRobotsStore } from '../stores/robots'
 import { NCard, NDataTable, NTag, NButton } from 'naive-ui'
 import { h } from 'vue'
-import { previewSpriteFor } from '../lib/robotSprite'
+import { previewSpriteFor, tintStyle } from '../lib/robotSprite'
 
 const store = useRobotsStore()
 
@@ -24,12 +24,11 @@ const columns = [
         src: previewSpriteFor(r),
         alt: r.id,
         class: 'h-10 w-10 object-contain',
-        style: r.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : '',
+        style: tintStyle(r.status),
       }),
   },
   { title: 'ID', key: 'id', render: (r) => h('span', { class: 'font-mono text-brand-800' }, r.id) },
   { title: 'Model', key: 'model' },
-  { title: 'Type', key: 'type', render: (r) => h('span', { class: 'text-xs text-slate-600' }, r.type) },
   {
     title: 'Status',
     key: 'status',

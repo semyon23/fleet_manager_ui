@@ -3,7 +3,7 @@ import { useRobotsStore } from '../stores/robots'
 import { useMapsStore } from '../stores/maps'
 import { NCard, NTag, NSelect } from 'naive-ui'
 import { ref, computed, watchEffect } from 'vue'
-import { spriteFor, previewSpriteFor } from '../lib/robotSprite'
+import { spriteFor, previewSpriteFor, tintStyle } from '../lib/robotSprite'
 
 const robots = useRobotsStore()
 const maps = useMapsStore()
@@ -32,7 +32,7 @@ const hovered = ref(null)
 const SCALE = 25
 const OFFSET_X = 60
 const OFFSET_Y = 60
-const ROBOT_SIZE = 52
+const ROBOT_SIZE = 56
 
 const filteredRobots = computed(() => {
   if (!activeMap.value) return robots.robots
@@ -48,7 +48,8 @@ const markers = computed(() =>
     stroke: statusColor[r.status],
     thetaDeg: (-r.theta * 180) / Math.PI,
     activeSprite: spriteFor(r),
-    hasDirections: !!r.sprites,
+    isTopView: r.status !== 'moving',
+    tintFilter: `url(#tint-${r.status})`,
   })),
 )
 </script>
@@ -79,7 +80,31 @@ const markers = computed(() =>
             <filter id="robot-shadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25" />
             </filter>
+
+            <!-- Тонирование спрайта по статусу через hue-rotate.
+                 Базовый цвет свечений робота — синий (~220°).
+                 Белые/чёрные корпусные части не меняются. -->
+            <filter id="tint-moving">
+              <feColorMatrix type="hueRotate" values="-120" />
+            </filter>
+            <filter id="tint-charging">
+              <feColorMatrix type="hueRotate" values="-160" />
+            </filter>
+            <filter id="tint-error">
+              <feColorMatrix type="hueRotate" values="140" />
+            </filter>
+            <filter id="tint-idle">
+              <feColorMatrix type="saturate" values="0.15" />
+            </filter>
+            <filter id="tint-offline">
+              <feColorMatrix type="matrix"
+                values="0.33 0.33 0.33 0 0
+                        0.33 0.33 0.33 0 0
+                        0.33 0.33 0.33 0 0
+                        0    0    0    0.5 0" />
+            </filter>
           </defs>
+
           <rect width="700" height="600" fill="url(#grid)" />
 
           <template v-if="activeMap">
@@ -132,14 +157,18 @@ const markers = computed(() =>
               :y="m.py - ROBOT_SIZE / 2"
               :width="ROBOT_SIZE"
               :height="ROBOT_SIZE"
-              :style="m.status === 'offline' ? 'filter: grayscale(1) opacity(0.5)' : ''"
-              filter="url(#robot-shadow)"
+              :filter="m.tintFilter"
             />
 
-            <g v-if="!m.hasDirections" :transform="`translate(${m.px} ${m.py + ROBOT_SIZE / 2 + 6}) rotate(${m.thetaDeg})`">
+            <!-- Указатель ориентации только для top-view (когда робот стоит, спрайт симметричный).
+                 Треугольник вокруг корпуса показывает где "перед". -->
+            <g v-if="m.isTopView && m.status !== 'offline'"
+               :transform="`translate(${m.px} ${m.py}) rotate(${-m.thetaDeg})`">
               <polygon
-                points="-4,0 4,0 0,-8"
+                :points="`${ROBOT_SIZE / 2 + 6},0 ${ROBOT_SIZE / 2 + 14},-5 ${ROBOT_SIZE / 2 + 14},5`"
                 :fill="m.stroke"
+                stroke="white"
+                stroke-width="1"
               />
             </g>
 
@@ -219,10 +248,14 @@ const markers = computed(() =>
       <div v-if="!selected" class="text-sm text-slate-500">Click a robot to see full details.</div>
       <div v-else class="flex flex-col gap-3 text-sm">
         <div class="grid place-items-center rounded bg-slate-100 py-3">
-          <img :src="previewSpriteFor(selected)" :alt="selected.id" class="h-32 w-32 object-contain" />
+          <img
+            :src="previewSpriteFor(selected)"
+            :alt="selected.id"
+            class="h-32 w-32 object-contain"
+            :style="tintStyle(selected.status)"
+          />
         </div>
         <div class="flex justify-between"><span class="text-slate-500">Model</span><span class="font-mono">{{ selected.model }}</span></div>
-        <div class="flex justify-between"><span class="text-slate-500">Type</span><span class="text-xs">{{ selected.type }}</span></div>
         <div class="flex justify-between">
           <span class="text-slate-500">Status</span>
           <NTag :color="{ color: selected.stroke, textColor: 'white' }" size="small">{{ selected.status }}</NTag>
