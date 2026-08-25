@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMapsStore } from '../stores/maps'
 import { pixelToWorld } from '../lib/nav2meta'
@@ -315,17 +315,29 @@ const gridIntervalInLayout = computed(() => {
   return Math.max(0.5, gridInterval.value / res)
 })
 
-// Мутируем reactive graphConfigs напрямую вместо computed-обёртки.
-// Эталон vda5050_lif_editor работает через `reactive(initialConfigs)` +
-// прямые мутации, и v-network-graph корректно ловит изменения. Computed
-// возвращающий new object каждый re-run приводил к перерендеру, при котором
-// normal state для существующих нод не отрисовывался.
-watch(showGrid, (v) => { graphConfigs.view.grid.visible = v }, { immediate: true })
-watch(showLabels, (v) => {
-  graphConfigs.node.label.visible = v
-  graphConfigs.edge.label.visible = v
-}, { immediate: true })
-watch(gridIntervalInLayout, (v) => { graphConfigs.view.grid.interval = v }, { immediate: true })
+// Computed поверх reactive(initialConfigs) — точь-в-точь как эталон
+// NetworkGraph.vue:179 dynamicConfigs. Spread копия нужна чтобы v-network-graph
+// увидел смену prop и подхватил visibility/grid interval. reactive base
+// обеспечивает что normal.color-функция остаётся живой ссылкой.
+const dynamicConfig = computed(() => ({
+  ...graphConfigs,
+  node: {
+    ...graphConfigs.node,
+    label: { ...graphConfigs.node.label, visible: showLabels.value },
+  },
+  edge: {
+    ...graphConfigs.edge,
+    label: { ...graphConfigs.edge.label, visible: showLabels.value },
+  },
+  view: {
+    ...graphConfigs.view,
+    grid: {
+      ...graphConfigs.view.grid,
+      visible: showGrid.value,
+      interval: gridIntervalInLayout.value,
+    },
+  },
+}))
 
 const eventHandlers = {
   'view:click': onViewClick,
@@ -802,7 +814,7 @@ const TOOLS = [
           v-model:layouts="layouts"
           v-model:selected-nodes="selectedNodes"
           v-model:selected-edges="selectedEdges"
-          :configs="graphConfigs"
+          :configs="dynamicConfig"
           :event-handlers="eventHandlers"
           :layers="{ map: 'base' }"
           class="absolute inset-0"
