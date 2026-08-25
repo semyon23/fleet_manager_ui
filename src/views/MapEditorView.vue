@@ -158,9 +158,20 @@ function syncFromStore() {
 }
 
 // === Interactions ===
+function eventToLayout(evt) {
+  const nativeEvt = evt?.event
+  if (!nativeEvt || !graph.value) return null
+  try {
+    return graph.value.translateFromDomToSvgCoordinates({
+      x: nativeEvt.clientX,
+      y: nativeEvt.clientY,
+    })
+  } catch { return null }
+}
+
 function onViewClick(evt) {
   if (!map.value) return
-  const pos = evt.point || (graph.value?.eventOffsetToSvg?.(evt.event) ?? null)
+  const pos = eventToLayout(evt)
   if (!pos) return
   const u = pos.x, v = pos.y
 
@@ -345,22 +356,15 @@ const backgroundImage = computed(() =>
 // === fit-to-map ===
 function fitToMap() {
   if (!graph.value || !map.value) return
-  const inst = graph.value
   const w = map.value.width, h = map.value.height
   try {
-    const dummyIds = ['__fit_tl', '__fit_tr', '__fit_bl', '__fit_br']
-    const positions = [{x:0,y:0}, {x:w,y:0}, {x:0,y:h}, {x:w,y:h}]
-    for (let i = 0; i < 4; i++) {
-      nodes[dummyIds[i]] = { name: '', __hidden: true }
-      layouts.nodes[dummyIds[i]] = positions[i]
-    }
-    if (typeof inst.fitToContents === 'function') inst.fitToContents()
-    setTimeout(() => {
-      for (const id of dummyIds) {
-        delete nodes[id]
-        delete layouts.nodes[id]
-      }
-    }, 200)
+    const margin = Math.max(w, h) * 0.05
+    graph.value.setViewBox({
+      left: -margin,
+      top: -margin,
+      right: w + margin,
+      bottom: h + margin,
+    })
   } catch {}
 }
 
@@ -587,8 +591,15 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
 })
 
-// Курсор в мировых координатах — пока пусто, включим когда добьёмся точной конвертации через graph API
+// Курсор в мировых координатах — через translateFromDomToSvgCoordinates
 const cursorWorld = ref(null)
+function onGraphMouseMove(evt) {
+  if (!map.value || !graph.value) return
+  try {
+    const svgPt = graph.value.translateFromDomToSvgCoordinates({ x: evt.clientX, y: evt.clientY })
+    cursorWorld.value = pixelToWorld(map.value.meta, svgPt.x, svgPt.y, map.value.height)
+  } catch {}
+}
 
 // Selector карт для переключения
 const allMapsOptions = computed(() =>
@@ -791,7 +802,7 @@ const TOOLS = [
       </aside>
 
       <!-- CENTER GRAPH -->
-      <main class="relative flex-1 overflow-hidden bg-white">
+      <main class="relative flex-1 overflow-hidden bg-white" @mousemove="onGraphMouseMove">
         <v-network-graph
           ref="graph"
           :nodes="visibleNodes"
