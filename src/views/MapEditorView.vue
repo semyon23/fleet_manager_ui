@@ -189,27 +189,27 @@ function onViewClick(evt) {
 // Deep-clone plain objects перед присваиванием — v-network-graph подхватывает
 // изменения корректно только когда получает свежие plain-references,
 // иначе Proxy-mutation'ы не всегда триггерят watch внутри библиотеки.
+// Порядок важен: сначала layout (иначе v-network-graph рендерит ноду
+// без координат — NaN → circle не рисуется). Затем сама нода.
 function addNodeToGraph(wp) {
-  nodes[wp.id] = JSON.parse(JSON.stringify({
+  layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
+  nodes[wp.id] = {
     name: wp.name || wp.id,
     __kind: 'waypoint',
     color: '#94a3b8',
-  }))
-  layouts.nodes[wp.id] = JSON.parse(JSON.stringify({ x: wp.u, y: wp.v }))
+  }
 }
 function addStationToGraph(s) {
-  nodes[s.id] = JSON.parse(JSON.stringify({
+  layouts.nodes[s.id] = { x: s.u, y: s.v }
+  nodes[s.id] = {
     name: s.name || s.id,
     __kind: 'station',
     __stationKind: s.kind,
     color: stationColorFor(s.kind),
-  }))
-  layouts.nodes[s.id] = JSON.parse(JSON.stringify({ x: s.u, y: s.v }))
+  }
 }
 function addEdgeToGraph(e) {
-  edges[e.id] = JSON.parse(JSON.stringify({
-    source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed,
-  }))
+  edges[e.id] = { source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed }
 }
 
 function createNodeAt(u, v) {
