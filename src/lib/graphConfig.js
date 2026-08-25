@@ -1,4 +1,3 @@
-import { reactive } from 'vue'
 
 /**
  * Конфиг рендера графа — под vda5050-lif-editor стилистику.
@@ -90,4 +89,4 @@ export const initialConfigs = {
   },
 }
 
-export const graphConfigs = reactive(initialConfigs)
+export const graphConfigs = initialConfigs

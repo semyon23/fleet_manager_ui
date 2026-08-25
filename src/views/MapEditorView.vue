@@ -806,7 +806,7 @@ const TOOLS = [
       </aside>
 
       <!-- CENTER GRAPH -->
-      <main class="relative flex-1 overflow-hidden bg-white" @mousemove="onGraphMouseMove">
+      <main class="relative flex-1 overflow-hidden bg-white">
         <v-network-graph
           ref="graph"
           :nodes="nodes"
