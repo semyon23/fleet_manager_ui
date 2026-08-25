@@ -44,8 +44,8 @@ const search = ref('')
 // Visibility toggles
 const showGrid = ref(true)
 const showLabels = ref(true)
-const showNodes = ref(true)
-const showEdges = ref(true)
+// showNodes / showEdges убраны — computed-обёртка ломала реактивность
+// v-network-graph. При необходимости показ можно сделать через configs.opacity.
 const gridInterval = ref(1)
 
 // Edge draft (для tool='edge' — держим первую выбранную ноду)
@@ -186,21 +186,30 @@ function onViewClick(evt) {
   }
 }
 
+// Deep-clone plain objects перед присваиванием — v-network-graph подхватывает
+// изменения корректно только когда получает свежие plain-references,
+// иначе Proxy-mutation'ы не всегда триггерят watch внутри библиотеки.
 function addNodeToGraph(wp) {
-  nodes[wp.id] = { name: wp.name || wp.id, __kind: 'waypoint', color: '#94a3b8' }
-  layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
+  nodes[wp.id] = JSON.parse(JSON.stringify({
+    name: wp.name || wp.id,
+    __kind: 'waypoint',
+    color: '#94a3b8',
+  }))
+  layouts.nodes[wp.id] = JSON.parse(JSON.stringify({ x: wp.u, y: wp.v }))
 }
 function addStationToGraph(s) {
-  nodes[s.id] = {
+  nodes[s.id] = JSON.parse(JSON.stringify({
     name: s.name || s.id,
     __kind: 'station',
     __stationKind: s.kind,
     color: stationColorFor(s.kind),
-  }
-  layouts.nodes[s.id] = { x: s.u, y: s.v }
+  }))
+  layouts.nodes[s.id] = JSON.parse(JSON.stringify({ x: s.u, y: s.v }))
 }
 function addEdgeToGraph(e) {
-  edges[e.id] = { source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed }
+  edges[e.id] = JSON.parse(JSON.stringify({
+    source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed,
+  }))
 }
 
 function createNodeAt(u, v) {
@@ -365,8 +374,10 @@ const dynamicConfig = computed(() => ({
   },
 }))
 
-const visibleNodes = computed(() => (showNodes.value ? nodes : {}))
-const visibleEdges = computed(() => (showEdges.value ? edges : {}))
+// Раньше здесь были computed visibleNodes/visibleEdges которые возвращали
+// либо nodes, либо пустой объект. Но computed возвращающий тот же reactive
+// reference не триггерил re-render v-network-graph при mutation внутри
+// nodes/edges. Передаём напрямую — v-network-graph сам watch'ит их.
 
 const eventHandlers = {
   'view:click': onViewClick,
@@ -450,17 +461,13 @@ function onEditMenu(key) {
 }
 
 const viewMenu = computed(() => [
-  { label: (showNodes.value ? '✓ ' : '  ') + 'Nodes', key: 'toggle-nodes' },
-  { label: (showEdges.value ? '✓ ' : '  ') + 'Edges', key: 'toggle-edges' },
   { label: (showLabels.value ? '✓ ' : '  ') + 'Labels', key: 'toggle-labels' },
   { label: (showGrid.value ? '✓ ' : '  ') + 'Grid', key: 'toggle-grid' },
   { type: 'divider' },
   { label: 'Fit to map', key: 'fit' },
 ])
 function onViewMenu(key) {
-  if (key === 'toggle-nodes') showNodes.value = !showNodes.value
-  else if (key === 'toggle-edges') showEdges.value = !showEdges.value
-  else if (key === 'toggle-labels') showLabels.value = !showLabels.value
+  if (key === 'toggle-labels') showLabels.value = !showLabels.value
   else if (key === 'toggle-grid') showGrid.value = !showGrid.value
   else if (key === 'fit') fitToMap()
 }
@@ -842,8 +849,8 @@ const TOOLS = [
       <main class="relative flex-1 overflow-hidden bg-white" @mousemove="onGraphMouseMove">
         <v-network-graph
           ref="graph"
-          :nodes="visibleNodes"
-          :edges="visibleEdges"
+          :nodes="nodes"
+          :edges="edges"
           v-model:layouts="layouts"
           v-model:selected-nodes="selectedNodes"
           v-model:selected-edges="selectedEdges"
