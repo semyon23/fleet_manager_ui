@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, reactive } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMapsStore } from '../stores/maps'
 import { pixelToWorld } from '../lib/nav2meta'
@@ -186,23 +186,52 @@ function onViewClick(evt) {
   }
 }
 
+function addNodeToGraph(wp) {
+  nodes[wp.id] = { name: wp.name || wp.id, __kind: 'waypoint', color: '#94a3b8' }
+  layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
+}
+function addStationToGraph(s) {
+  nodes[s.id] = {
+    name: s.name || s.id,
+    __kind: 'station',
+    __stationKind: s.kind,
+    color: stationColorFor(s.kind),
+  }
+  layouts.nodes[s.id] = { x: s.u, y: s.v }
+}
+function addEdgeToGraph(e) {
+  edges[e.id] = { source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed }
+}
+
 function createNodeAt(u, v) {
   const id = 'n' + Math.floor(Math.random() * 9999) + '_' + Math.floor(Math.random() * 9999)
   const wp = { id, u, v, name: id, description: '', mapId: '' }
-  let newEdges = map.value.edges
+
+  // Собираем возможные edges для fast-create
+  const addedEdges = []
   if (fastCreate.value && selectedNodes.value.length === 1) {
     const fromId = selectedNodes.value[0]
-    if (map.value.waypoints.some((x) => x.id === fromId) || (map.value.stations || []).some((s) => s.id === fromId)) {
-      newEdges = [...newEdges, makeEdge(fromId, id)]
-      if (doubleWay.value) newEdges = [...newEdges, makeEdge(id, fromId)]
+    const fromExists = map.value.waypoints.some((x) => x.id === fromId) ||
+      (map.value.stations || []).some((s) => s.id === fromId)
+    if (fromExists) {
+      addedEdges.push(makeEdge(fromId, id))
+      if (doubleWay.value) addedEdges.push(makeEdge(id, fromId))
     }
   }
+
+  // Store update
   store.update(map.value.id, {
     waypoints: [...map.value.waypoints, wp],
-    edges: newEdges,
+    edges: [...map.value.edges, ...addedEdges],
   })
-  syncFromStore()
-  selectedNodes.value = [id]
+
+  // Incremental update reactive нод и edges — БЕЗ полного syncFromStore,
+  // чтобы v-network-graph не терял свои внутренние references
+  addNodeToGraph(wp)
+  for (const e of addedEdges) addEdgeToGraph(e)
+
+  // Selection после того как v-network-graph отрендерит новую ноду
+  nextTick(() => { selectedNodes.value = [id] })
   pushHistory()
 }
 
@@ -214,8 +243,8 @@ function createStationAt(u, v) {
     interactionNodeIds: [],
   }
   store.update(map.value.id, { stations: [...(map.value.stations || []), station] })
-  syncFromStore()
-  selectedNodes.value = [id]
+  addStationToGraph(station)
+  nextTick(() => { selectedNodes.value = [id] })
   pushHistory()
 }
 
@@ -236,21 +265,21 @@ function onNodeClick({ node }) {
       msg.info('Edge from ' + node + ' — click target')
     } else if (pendingEdgeStart !== node) {
       const eNew = makeEdge(pendingEdgeStart, node)
-      const list = [...map.value.edges, eNew]
-      if (doubleWay.value) list.push(makeEdge(node, pendingEdgeStart))
-      store.update(map.value.id, { edges: list })
+      const added = [eNew]
+      if (doubleWay.value) added.push(makeEdge(node, pendingEdgeStart))
+      store.update(map.value.id, { edges: [...map.value.edges, ...added] })
+      for (const e of added) addEdgeToGraph(e)
       pendingEdgeStart = null
-      syncFromStore()
       pushHistory()
     }
     return
   }
   if (tool.value === 'node' && fastCreate.value && selectedNodes.value.length === 1 && selectedNodes.value[0] !== node) {
     const eNew = makeEdge(selectedNodes.value[0], node)
-    const list = [...map.value.edges, eNew]
-    if (doubleWay.value) list.push(makeEdge(node, selectedNodes.value[0]))
-    store.update(map.value.id, { edges: list })
-    syncFromStore()
+    const added = [eNew]
+    if (doubleWay.value) added.push(makeEdge(node, selectedNodes.value[0]))
+    store.update(map.value.id, { edges: [...map.value.edges, ...added] })
+    for (const e of added) addEdgeToGraph(e)
     pushHistory()
   }
 }
