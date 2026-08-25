@@ -162,9 +162,10 @@ function eventToLayout(evt) {
   const nativeEvt = evt?.event
   if (!nativeEvt || !graph.value) return null
   try {
+    // v-network-graph ожидает offset (клиентские координаты относительно SVG-target)
     return graph.value.translateFromDomToSvgCoordinates({
-      x: nativeEvt.clientX,
-      y: nativeEvt.clientY,
+      x: nativeEvt.offsetX,
+      y: nativeEvt.offsetY,
     })
   } catch { return null }
 }
@@ -596,7 +597,14 @@ const cursorWorld = ref(null)
 function onGraphMouseMove(evt) {
   if (!map.value || !graph.value) return
   try {
-    const svgPt = graph.value.translateFromDomToSvgCoordinates({ x: evt.clientX, y: evt.clientY })
+    // Ищем ближайший SVG target — offsetX/Y относительно svg-корня графа
+    const svgEl = evt.currentTarget?.querySelector('svg')
+    if (!svgEl) return
+    const rect = svgEl.getBoundingClientRect()
+    const svgPt = graph.value.translateFromDomToSvgCoordinates({
+      x: evt.clientX - rect.left,
+      y: evt.clientY - rect.top,
+    })
     cursorWorld.value = pixelToWorld(map.value.meta, svgPt.x, svgPt.y, map.value.height)
   } catch {}
 }
