@@ -338,6 +338,9 @@ const gridIntervalInLayout = computed(() => {
   return Math.max(0.5, gridInterval.value / res)
 })
 
+// Плоские значения radius/color в normal state. Функции ломают v-network-graph
+// — граф не пересчитывает свойства для новых нод, circle рендерится только
+// когда нода selected (там свои значения) или когда другая нода добавляется.
 const dynamicConfig = computed(() => ({
   ...graphConfigs,
   view: {
@@ -350,16 +353,6 @@ const dynamicConfig = computed(() => ({
   },
   node: {
     ...graphConfigs.node,
-    normal: {
-      ...graphConfigs.node.normal,
-      type: (n) => (n.__kind === 'station' ? 'rect' : 'circle'),
-      color: (n) => (n.__hidden ? 'transparent' : n.color || '#94a3b8'),
-      radius: (n) => (n.__hidden ? 0 : n.__kind === 'station' ? 8 : 8),
-      width: (n) => (n.__hidden ? 0 : 16),
-      height: (n) => (n.__hidden ? 0 : 16),
-      borderRadius: (n) => (n.__kind === 'station' ? 2 : undefined),
-      strokeWidth: (n) => (n.__hidden ? 0 : 2),
-    },
     label: {
       ...graphConfigs.node.label,
       visible: showLabels.value,
