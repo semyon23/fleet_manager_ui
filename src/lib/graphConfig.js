@@ -10,6 +10,8 @@
 const shape = {
   type: 'circle',
   radius: 8,
+  strokeWidth: 0,
+  strokeColor: '#ffffff',
 }
 
 export const initialConfigs = {
