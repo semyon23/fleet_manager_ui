@@ -1,8 +1,8 @@
 import { defineConfigs } from 'v-network-graph'
 
 /**
- * Конфиг рендера графа — портирован из bekirbostanci/vda5050_lif_editor/src/utils/graphConfig.ts
- * Стилистика "точь-в-точь" c референсом.
+ * Конфиг рендера графа — под vda5050-lif-editor стилистику
+ * (серые ноды, анимированные пунктирные edges, светлая сетка).
  */
 export const graphConfigs = defineConfigs({
   view: {
@@ -13,31 +13,30 @@ export const graphConfigs = defineConfigs({
       interval: 1,
       thickIncrements: 5,
       line: {
-        color: '#e2e8f0',
+        color: '#e5e7eb',
         width: 1,
         dasharray: 1,
       },
       thick: {
-        color: '#94a3b8',
+        color: '#9ca3af',
         width: 1,
         dasharray: 0,
       },
     },
-    layoutHandler: undefined,
-    scalingObjects: true,
+    scalingObjects: false,
   },
   node: {
     draggable: true,
     selectable: 3,
     normal: {
       type: 'circle',
-      radius: 12,
-      color: '#1e40af',
+      radius: 8,
+      color: '#94a3b8',
       strokeWidth: 2,
       strokeColor: '#ffffff',
     },
     hover: {
-      color: '#3b82f6',
+      color: '#6b7280',
       strokeWidth: 3,
     },
     selected: {
@@ -45,26 +44,27 @@ export const graphConfigs = defineConfigs({
     },
     label: {
       visible: true,
-      fontSize: 11,
-      color: '#1e40af',
+      fontSize: 10,
+      color: '#374151',
+      direction: 'north',
+      margin: 8,
       background: {
-        visible: true,
-        color: '#ffffffcc',
-        padding: { horizontal: 4, vertical: 2 },
-        borderRadius: 3,
+        visible: false,
       },
     },
   },
   edge: {
     selectable: 3,
+    gap: 8,
     normal: {
       width: 2,
-      color: '#1e40af',
-      dasharray: '0',
-      animate: false,
+      color: '#9ca3af',
+      dasharray: '10 8',
+      animate: true,
+      animationSpeed: 30,
     },
     hover: {
-      color: '#3b82f6',
+      color: '#6b7280',
       width: 3,
     },
     selected: {
@@ -72,15 +72,8 @@ export const graphConfigs = defineConfigs({
       width: 3,
     },
     label: {
-      fontSize: 11,
+      fontSize: 10,
       visible: false,
-      color: '#1e40af',
-      background: {
-        visible: true,
-        color: '#ffffffcc',
-        padding: { horizontal: 3, vertical: 2 },
-        borderRadius: 3,
-      },
     },
     marker: {
       target: {
