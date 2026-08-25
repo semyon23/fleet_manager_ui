@@ -314,7 +314,13 @@ function clearAll() {
   pushHistory()
 }
 
-// Динамический конфиг с переключением grid/labels/interval
+// gridInterval у пользователя в метрах — а v-network-graph рендерит сетку
+// в единицах layout-координат (у нас это пиксели PGM). Пересчитываем через resolution.
+const gridIntervalInLayout = computed(() => {
+  const res = map.value?.meta?.resolution || 0.05
+  return Math.max(0.5, gridInterval.value / res)
+})
+
 const dynamicConfig = computed(() => ({
   ...graphConfigs,
   view: {
@@ -322,7 +328,7 @@ const dynamicConfig = computed(() => ({
     grid: {
       ...graphConfigs.view.grid,
       visible: showGrid.value,
-      interval: gridInterval.value,
+      interval: gridIntervalInLayout.value,
     },
   },
   node: {
@@ -331,10 +337,11 @@ const dynamicConfig = computed(() => ({
       ...graphConfigs.node.normal,
       type: (n) => (n.__kind === 'station' ? 'rect' : 'circle'),
       color: (n) => n.color || '#1e40af',
-      radius: (n) => (n.__kind === 'station' ? 14 : 12),
-      width: (n) => (n.__kind === 'station' ? 28 : 24),
-      height: (n) => (n.__kind === 'station' ? 28 : 24),
-      borderRadius: (n) => (n.__kind === 'station' ? 4 : undefined),
+      radius: (n) => (n.__kind === 'station' ? 7 : 6),
+      width: (n) => (n.__kind === 'station' ? 14 : 12),
+      height: (n) => (n.__kind === 'station' ? 14 : 12),
+      borderRadius: (n) => (n.__kind === 'station' ? 2 : undefined),
+      strokeWidth: 1.5,
     },
     hover: {
       ...graphConfigs.node.hover,
@@ -418,11 +425,35 @@ function onKey(e) {
   }
 }
 
-onMounted(() => {
+function fitToMap() {
+  if (!graph.value || !map.value) return
+  const inst = graph.value
+  const box = { x: 0, y: 0, width: map.value.width, height: map.value.height }
+  // Пробуем ViewportPI если доступен
+  try {
+    if (typeof inst.fitToBox === 'function') {
+      inst.fitToBox(box)
+      return
+    }
+    // Fallback: расчёт zoom+pan руками
+    const svgSize = inst.getSizes()
+    if (!svgSize) return
+    const scale = Math.min(svgSize.width / box.width, svgSize.height / box.height) * 0.92
+    inst.setZoomLevel(scale)
+    if (typeof inst.panTo === 'function') {
+      inst.panTo({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+    }
+  } catch { /* v-network-graph API варьируется по версиям */ }
+}
+
+onMounted(async () => {
   if (!map.value) { router.replace({ name: 'maps' }); return }
   syncFromStore()
   pushHistory()
   window.addEventListener('keydown', onKey)
+  // Небольшая задержка чтобы v-network-graph успел смонтироваться
+  await new Promise((r) => setTimeout(r, 100))
+  fitToMap()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
@@ -620,23 +651,6 @@ function toggleRobot(id) {
             :disabled="!showGrid"
           />
           <div class="text-right font-mono text-[10px] text-slate-500">{{ gridInterval }} m</div>
-        </div>
-
-        <div class="mt-4">
-          <div class="mb-2 text-xs uppercase tracking-wider text-slate-500">Assigned robots</div>
-          <div class="flex flex-wrap gap-1">
-            <button
-              v-for="opt in robotOptions"
-              :key="opt.value"
-              :class="[
-                'rounded border px-2 py-1 font-mono text-xs transition',
-                map.assignedRobots.includes(opt.value)
-                  ? 'border-brand-800 bg-brand-800 text-white'
-                  : 'border-slate-200 hover:bg-brand-50',
-              ]"
-              @click="toggleRobot(opt.value)"
-            >{{ opt.label }}</button>
-          </div>
         </div>
 
         <div class="mt-4 flex flex-col gap-1 font-mono text-xs text-slate-500">
