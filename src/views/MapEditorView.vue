@@ -812,6 +812,7 @@ const TOOLS = [
               :width="backgroundImage.width"
               :height="backgroundImage.height"
               opacity="0.55"
+              pointer-events="none"
             />
           </template>
         </v-network-graph>
