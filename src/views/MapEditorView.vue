@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMapsStore } from '../stores/maps'
 import { pixelToWorld } from '../lib/nav2meta'
@@ -125,36 +125,12 @@ function syncFromStore() {
   const allIds = new Set([...wpIds, ...stationIds])
 
   for (const id of Object.keys(edges)) if (!edgeIds.has(id)) delete edges[id]
+  for (const id of Object.keys(nodes)) if (!allIds.has(id)) delete nodes[id]
+  for (const id of Object.keys(layouts.nodes)) if (!allIds.has(id)) delete layouts.nodes[id]
 
-  for (const wp of map.value.waypoints) {
-    nodes[wp.id] = {
-      name: wp.name || wp.id,
-      __kind: 'waypoint',
-      color: '#94a3b8',
-    }
-    layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
-  }
-  for (const s of map.value.stations || []) {
-    nodes[s.id] = {
-      name: s.name || s.id,
-      __kind: 'station',
-      __stationKind: s.kind,
-      color: stationColorFor(s.kind),
-    }
-    layouts.nodes[s.id] = { x: s.u, y: s.v }
-  }
-  for (const id of Object.keys(nodes)) if (!allIds.has(id) && !nodes[id]?.__hidden) delete nodes[id]
-  for (const id of Object.keys(layouts.nodes)) if (!allIds.has(id) && !nodes[id]?.__hidden) delete layouts.nodes[id]
-
-  for (const e of map.value.edges) {
-    edges[e.id] = {
-      source: e.from,
-      target: e.to,
-      name: e.id,
-      cost: e.cost,
-      maxSpeed: e.maxSpeed,
-    }
-  }
+  for (const wp of map.value.waypoints) addNodeToGraph(wp)
+  for (const s of map.value.stations || []) addStationToGraph(s)
+  for (const e of map.value.edges) addEdgeToGraph(e)
 }
 
 // === Interactions ===
@@ -186,30 +162,31 @@ function onViewClick(evt) {
   }
 }
 
-// Deep-clone plain objects перед присваиванием — v-network-graph подхватывает
-// изменения корректно только когда получает свежие plain-references,
-// иначе Proxy-mutation'ы не всегда триггерят watch внутри библиотеки.
-// Порядок важен: сначала layout (иначе v-network-graph рендерит ноду
-// без координат — NaN → circle не рисуется). Затем сама нода.
+// Точный порядок и deep-clone взяты из эталона vda5050_lif_editor
+// (layout.controller.ts createNode:376): сначала nodes[id], потом layouts.nodes[id].
+// JSON.parse(JSON.stringify(...)) даёт plain object без Vue-proxy, чтобы
+// v-network-graph гарантированно перевычислил normal.color для новой ноды.
 function addNodeToGraph(wp) {
-  layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
-  nodes[wp.id] = {
+  nodes[wp.id] = JSON.parse(JSON.stringify({
     name: wp.name || wp.id,
-    __kind: 'waypoint',
     color: '#94a3b8',
-  }
+    __kind: 'waypoint',
+  }))
+  layouts.nodes[wp.id] = { x: wp.u, y: wp.v }
 }
 function addStationToGraph(s) {
-  layouts.nodes[s.id] = { x: s.u, y: s.v }
-  nodes[s.id] = {
+  nodes[s.id] = JSON.parse(JSON.stringify({
     name: s.name || s.id,
+    color: stationColorFor(s.kind),
     __kind: 'station',
     __stationKind: s.kind,
-    color: stationColorFor(s.kind),
-  }
+  }))
+  layouts.nodes[s.id] = { x: s.u, y: s.v }
 }
 function addEdgeToGraph(e) {
-  edges[e.id] = { source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed }
+  edges[e.id] = JSON.parse(JSON.stringify({
+    source: e.from, target: e.to, name: e.id, cost: e.cost, maxSpeed: e.maxSpeed,
+  }))
 }
 
 function createNodeAt(u, v) {
@@ -338,39 +315,17 @@ const gridIntervalInLayout = computed(() => {
   return Math.max(0.5, gridInterval.value / res)
 })
 
-// Плоские значения radius/color в normal state. Функции ломают v-network-graph
-// — граф не пересчитывает свойства для новых нод, circle рендерится только
-// когда нода selected (там свои значения) или когда другая нода добавляется.
-const dynamicConfig = computed(() => ({
-  ...graphConfigs,
-  view: {
-    ...graphConfigs.view,
-    grid: {
-      ...graphConfigs.view.grid,
-      visible: showGrid.value,
-      interval: gridIntervalInLayout.value,
-    },
-  },
-  node: {
-    ...graphConfigs.node,
-    label: {
-      ...graphConfigs.node.label,
-      visible: showLabels.value,
-    },
-  },
-  edge: {
-    ...graphConfigs.edge,
-    label: {
-      ...graphConfigs.edge.label,
-      visible: showLabels.value,
-    },
-  },
-}))
-
-// Раньше здесь были computed visibleNodes/visibleEdges которые возвращали
-// либо nodes, либо пустой объект. Но computed возвращающий тот же reactive
-// reference не триггерил re-render v-network-graph при mutation внутри
-// nodes/edges. Передаём напрямую — v-network-graph сам watch'ит их.
+// Мутируем reactive graphConfigs напрямую вместо computed-обёртки.
+// Эталон vda5050_lif_editor работает через `reactive(initialConfigs)` +
+// прямые мутации, и v-network-graph корректно ловит изменения. Computed
+// возвращающий new object каждый re-run приводил к перерендеру, при котором
+// normal state для существующих нод не отрисовывался.
+watch(showGrid, (v) => { graphConfigs.view.grid.visible = v }, { immediate: true })
+watch(showLabels, (v) => {
+  graphConfigs.node.label.visible = v
+  graphConfigs.edge.label.visible = v
+}, { immediate: true })
+watch(gridIntervalInLayout, (v) => { graphConfigs.view.grid.interval = v }, { immediate: true })
 
 const eventHandlers = {
   'view:click': onViewClick,
@@ -847,7 +802,7 @@ const TOOLS = [
           v-model:layouts="layouts"
           v-model:selected-nodes="selectedNodes"
           v-model:selected-edges="selectedEdges"
-          :configs="dynamicConfig"
+          :configs="graphConfigs"
           :event-handlers="eventHandlers"
           :layers="{ map: 'base' }"
           class="absolute inset-0"

@@ -1,13 +1,18 @@
-import { defineConfigs } from 'v-network-graph'
+import { reactive } from 'vue'
 
 /**
- * Конфиг рендера графа — под vda5050-lif-editor стилистику
- * (серые ноды, анимированные пунктирные edges, светлая сетка).
+ * Конфиг рендера графа — под vda5050-lif-editor стилистику.
+ * Собираем как plain object → reactive(), НЕ defineConfigs() —
+ * defineConfigs даёт "frozen" структуру, из-за которой при пересборке
+ * через spread новые ноды рендерятся с пустым normal-стейтом (label есть,
+ * а circle не появляется до hover/select). Эталон делает так же:
+ * scratchpad/vda5050_lif_editor/src/utils/graphConfig.ts
  */
-export const graphConfigs = defineConfigs({
+export const initialConfigs = {
   view: {
     minZoomLevel: 0.1,
     maxZoomLevel: 200,
+    scalingObjects: false,
     grid: {
       visible: true,
       interval: 1,
@@ -23,7 +28,6 @@ export const graphConfigs = defineConfigs({
         dasharray: 0,
       },
     },
-    scalingObjects: false,
   },
   node: {
     draggable: true,
@@ -31,13 +35,10 @@ export const graphConfigs = defineConfigs({
     normal: {
       type: 'circle',
       radius: 8,
-      color: '#94a3b8',
-      strokeWidth: 2,
-      strokeColor: '#ffffff',
+      color: (n) => n.color || '#94a3b8',
     },
     hover: {
-      color: '#6b7280',
-      strokeWidth: 3,
+      color: (n) => n.color || '#6b7280',
     },
     selected: {
       color: '#f97316',
@@ -87,4 +88,6 @@ export const graphConfigs = defineConfigs({
       },
     },
   },
-})
+}
+
+export const graphConfigs = reactive(initialConfigs)
