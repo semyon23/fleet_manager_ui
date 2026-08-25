@@ -1,12 +1,17 @@
-
 /**
  * Конфиг рендера графа — под vda5050-lif-editor стилистику.
- * Собираем как plain object → reactive(), НЕ defineConfigs() —
- * defineConfigs даёт "frozen" структуру, из-за которой при пересборке
- * через spread новые ноды рендерятся с пустым normal-стейтом (label есть,
- * а circle не появляется до hover/select). Эталон делает так же:
- * scratchpad/vda5050_lif_editor/src/utils/graphConfig.ts
+ *
+ * КРИТИЧНО: v-network-graph state-конфиги (normal/hover/selected) НЕ наследуют
+ * `type` и `radius` друг от друга. Если в `selected` не указать type='circle',
+ * то при потере hover'а (курсор ушёл) v-network-graph fallback'ится на дефолт
+ * `type: 'rect'` — а без width/height/radius атрибуты получают NaN → SVG-ошибки
+ * и нода пропадает. Поэтому явно дублируем type/radius во всех состояниях.
  */
+const shape = {
+  type: 'circle',
+  radius: 8,
+}
+
 export const initialConfigs = {
   view: {
     minZoomLevel: 0.1,
@@ -32,14 +37,15 @@ export const initialConfigs = {
     draggable: true,
     selectable: 3,
     normal: {
-      type: 'circle',
-      radius: 8,
+      ...shape,
       color: (n) => n.color || '#94a3b8',
     },
     hover: {
+      ...shape,
       color: (n) => n.color || '#6b7280',
     },
     selected: {
+      ...shape,
       color: '#f97316',
     },
     label: {
