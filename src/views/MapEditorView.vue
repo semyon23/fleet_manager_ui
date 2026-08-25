@@ -209,7 +209,8 @@ function onViewClick(evt) {
   const pos = evt.point || (graph.value?.eventOffsetToSvg?.(evt.event) ?? null)
   if (!pos) return
   const u = pos.x, v = pos.y
-  if (u < 0 || v < 0 || u > map.value.width || v > map.value.height) return
+  // Раньше отсекали клики вне image bounds — но пользователь может ставить waypoints
+  // и за пределами image (проходы к соседней зоне, buffer). Не блокируем.
 
   if (tool.value === 'create-station') {
     const id = 'st-' + Math.random().toString(36).slice(2, 6)
@@ -336,12 +337,12 @@ const dynamicConfig = computed(() => ({
     normal: {
       ...graphConfigs.node.normal,
       type: (n) => (n.__kind === 'station' ? 'rect' : 'circle'),
-      color: (n) => n.color || '#1e40af',
-      radius: (n) => (n.__kind === 'station' ? 7 : 6),
-      width: (n) => (n.__kind === 'station' ? 14 : 12),
-      height: (n) => (n.__kind === 'station' ? 14 : 12),
+      color: (n) => (n.__hidden ? 'transparent' : n.color || '#1e40af'),
+      radius: (n) => (n.__hidden ? 0 : n.__kind === 'station' ? 7 : 6),
+      width: (n) => (n.__hidden ? 0 : n.__kind === 'station' ? 14 : 12),
+      height: (n) => (n.__hidden ? 0 : n.__kind === 'station' ? 14 : 12),
       borderRadius: (n) => (n.__kind === 'station' ? 2 : undefined),
-      strokeWidth: 1.5,
+      strokeWidth: (n) => (n.__hidden ? 0 : 1.5),
     },
     hover: {
       ...graphConfigs.node.hover,
@@ -428,21 +429,33 @@ function onKey(e) {
 function fitToMap() {
   if (!graph.value || !map.value) return
   const inst = graph.value
-  const box = { x: 0, y: 0, width: map.value.width, height: map.value.height }
-  // Пробуем ViewportPI если доступен
+  const w = map.value.width
+  const h = map.value.height
+  // v-network-graph API: setViewBox — принимает {top,bottom,left,right} в graph-coord;
+  // fitToContents/panToCenter — работают только если есть ноды.
+  // Универсальный трюк: добавляем 4 dummy-ноды по углам, вызываем fitToContents, чистим.
   try {
-    if (typeof inst.fitToBox === 'function') {
-      inst.fitToBox(box)
-      return
+    const dummyIds = ['__fit_tl', '__fit_tr', '__fit_bl', '__fit_br']
+    const positions = [
+      { x: 0, y: 0 },
+      { x: w, y: 0 },
+      { x: 0, y: h },
+      { x: w, y: h },
+    ]
+    for (let i = 0; i < 4; i++) {
+      nodes[dummyIds[i]] = { name: '', __hidden: true }
+      layouts.nodes[dummyIds[i]] = positions[i]
     }
-    // Fallback: расчёт zoom+pan руками
-    const svgSize = inst.getSizes()
-    if (!svgSize) return
-    const scale = Math.min(svgSize.width / box.width, svgSize.height / box.height) * 0.92
-    inst.setZoomLevel(scale)
-    if (typeof inst.panTo === 'function') {
-      inst.panTo({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+    if (typeof inst.fitToContents === 'function') {
+      inst.fitToContents()
     }
+    // Убираем dummy-ноды после первого paint (viewport уже настроен)
+    setTimeout(() => {
+      for (const id of dummyIds) {
+        delete nodes[id]
+        delete layouts.nodes[id]
+      }
+    }, 200)
   } catch { /* v-network-graph API варьируется по версиям */ }
 }
 
@@ -451,8 +464,8 @@ onMounted(async () => {
   syncFromStore()
   pushHistory()
   window.addEventListener('keydown', onKey)
-  // Небольшая задержка чтобы v-network-graph успел смонтироваться
-  await new Promise((r) => setTimeout(r, 100))
+  // Дадим v-network-graph время смонтироваться и посчитать размеры
+  await new Promise((r) => setTimeout(r, 300))
   fitToMap()
 })
 onBeforeUnmount(() => {
