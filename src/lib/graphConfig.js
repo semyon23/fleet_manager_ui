@@ -1,3 +1,5 @@
+import { WAYPOINT, EDGE, GRID } from './theme'
+
 /**
  * Конфиг рендера графа — под vda5050-lif-editor стилистику.
  *
@@ -9,9 +11,9 @@
  */
 const shape = {
   type: 'circle',
-  radius: 8,
-  strokeWidth: 0,
-  strokeColor: '#ffffff',
+  radius: WAYPOINT.radius,
+  strokeWidth: WAYPOINT.strokeWidth,
+  strokeColor: WAYPOINT.strokeColor,
 }
 
 export const initialConfigs = {
@@ -23,16 +25,8 @@ export const initialConfigs = {
       visible: true,
       interval: 1,
       thickIncrements: 5,
-      line: {
-        color: '#e5e7eb',
-        width: 1,
-        dasharray: 1,
-      },
-      thick: {
-        color: '#9ca3af',
-        width: 1,
-        dasharray: 0,
-      },
+      line: GRID.line,
+      thick: GRID.thick,
     },
   },
   node: {
@@ -40,15 +34,15 @@ export const initialConfigs = {
     selectable: 3,
     normal: {
       ...shape,
-      color: (n) => n.color || '#94a3b8',
+      color: (n) => n.color || WAYPOINT.color,
     },
     hover: {
       ...shape,
-      color: (n) => n.color || '#6b7280',
+      color: (n) => n.color || WAYPOINT.colorHover,
     },
     selected: {
       ...shape,
-      color: '#f97316',
+      color: WAYPOINT.colorSelect,
     },
     label: {
       visible: true,
@@ -56,28 +50,26 @@ export const initialConfigs = {
       color: '#374151',
       direction: 'north',
       margin: 8,
-      background: {
-        visible: false,
-      },
+      background: { visible: false },
     },
   },
   edge: {
     selectable: 3,
     gap: 8,
     normal: {
-      width: 2,
-      color: '#9ca3af',
-      dasharray: '10 8',
+      width: EDGE.width,
+      color: EDGE.color,
+      dasharray: EDGE.dasharray,
       animate: true,
-      animationSpeed: 30,
+      animationSpeed: EDGE.animationSpeed,
     },
     hover: {
-      color: '#6b7280',
-      width: 3,
+      color: EDGE.colorHover,
+      width: EDGE.widthHover,
     },
     selected: {
-      color: '#f97316',
-      width: 3,
+      color: EDGE.colorSelect,
+      width: EDGE.widthHover,
     },
     label: {
       fontSize: 10,

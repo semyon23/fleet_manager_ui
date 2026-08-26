@@ -28,7 +28,7 @@ export function exportLif(map) {
         theta: 0,
         mapId,
       },
-      actions: [],
+      actions: wp.actions || [],
       vehicleTypeNodeProperties: [],
     }
   })

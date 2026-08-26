@@ -5,8 +5,13 @@ import { useMapsStore } from '../stores/maps'
 import { pixelToWorld, worldToPixel } from '../lib/nav2meta'
 import { exportNav2GeoJson, downloadJson } from '../lib/exportGeoJson'
 import { exportLif } from '../lib/exportLif'
+import { exportLifMulti } from '../lib/exportLifMulti'
+import { parseLif } from '../lib/importLif'
 import { validateMap } from '../lib/validateMap'
 import { graphConfigs } from '../lib/graphConfig'
+import { STATION_KINDS, stationColorFor, stationIconFor } from '../lib/theme'
+import { useSequentialIds } from '../composables/useSequentialIds'
+import { useAxisTicks } from '../composables/useAxisTicks'
 import {
   NButton,
   NInput,
@@ -50,33 +55,8 @@ const showBackground = ref(true)  // SLAM PGM подложка
 // v-network-graph. При необходимости показ можно сделать через configs.opacity.
 const gridInterval = ref(1)
 const snapToGrid = ref(false)
-const sequentialIds = ref(true)  // n001, n002... вместо n8519_7388
-
-// Возвращает следующий свободный ID вида prefix + zero-padded число.
-// Смотрит существующие ноды и станции чтобы не столкнуться.
-function nextSequentialId(prefix) {
-  const existing = new Set([
-    ...map.value.waypoints.map((w) => w.id),
-    ...(map.value.stations || []).map((s) => s.id),
-  ])
-  const re = new RegExp('^' + prefix + '(\\d+)$')
-  let max = 0
-  for (const id of existing) {
-    const m = id.match(re)
-    if (m) max = Math.max(max, parseInt(m[1], 10))
-  }
-  const next = max + 1
-  return prefix + String(next).padStart(3, '0')
-}
-function randomId(prefix) {
-  return prefix + Math.floor(Math.random() * 9999) + '_' + Math.floor(Math.random() * 9999)
-}
-function newNodeId() {
-  return sequentialIds.value ? nextSequentialId('n') : randomId('n')
-}
-function newStationId() {
-  return sequentialIds.value ? nextSequentialId('s') : randomId('s')
-}
+// Sequential IDs — вынесено в composables/useSequentialIds
+const { sequentialIds, newNodeId, newStationId } = useSequentialIds(map)
 
 // Округляет пиксельные (u, v) координаты к ближайшей вершине сетки.
 // Шаг сетки в метрах = gridInterval, конвертируется в пиксели через meta.resolution.
@@ -191,28 +171,8 @@ function applySnapshot(snap) {
   syncFromStore()
 }
 
-// Палитра под HikVision MonitorClient — rounded square + white icon внутри.
-// Цветовое кодирование:
-//   charge  = зелёный (⚡)
-//   parking = красный (P)
-//   loading = оранжевый (↑↓)
-//   custom  = синий (★)
-const STATION_KINDS = [
-  { label: 'Charge',  value: 'charge',  color: '#059669', icon: 'bolt' },
-  { label: 'Loading', value: 'loading', color: '#ea580c', icon: 'loading' },
-  { label: 'Parking', value: 'parking', color: '#dc2626', icon: 'p' },
-  { label: 'Custom',  value: 'custom',  color: '#2563eb', icon: 'star' },
-]
+// STATION_KINDS/stationColorFor/stationIconFor теперь в lib/theme.js (единая палитра)
 const nextStationKind = ref('charge')
-function stationKindMeta(kind) {
-  return STATION_KINDS.find((k) => k.value === kind) || STATION_KINDS[3]
-}
-function stationColorFor(kind) {
-  return stationKindMeta(kind).color
-}
-function stationIconFor(kind) {
-  return stationKindMeta(kind).icon
-}
 
 // === sync store <-> v-network-graph ===
 function syncFromStore() {
@@ -571,76 +531,8 @@ const backgroundImage = computed(() =>
   } : null
 )
 
-// === Метровые линейки (X сверху, Y слева) ===
-// Опрашиваем viewBox каждые 200мс — v-network-graph не эмитит pan-события.
-// Дёшево: два массива тиков в reactive, DOM обновляется только когда изменились.
-const xTicks = ref([])
-const yTicks = ref([])
-const canvasSize = ref({ w: 0, h: 0 })
-let axisPollTimer = null
-
-// Красивый шаг тиков: подбираем ближайший из [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100]
-// исходя из желаемого расстояния между тиками (~90px).
-const TICK_STEPS = [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500]
-function pickTickStep(metersPerPx, targetPx = 90) {
-  const desiredMeters = metersPerPx * targetPx
-  for (const s of TICK_STEPS) if (s >= desiredMeters) return s
-  return TICK_STEPS[TICK_STEPS.length - 1]
-}
-
-function computeAxisTicks() {
-  if (!graph.value || !map.value) return
-  let vb, sizes
-  try {
-    vb = graph.value.getViewBox()
-    sizes = graph.value.getSizes()
-  } catch { return }
-  if (!vb || !sizes) return
-  const w = sizes.width, h = sizes.height
-  const meta = map.value.meta
-  const H = map.value.height
-
-  if (canvasSize.value.w !== w || canvasSize.value.h !== h) {
-    canvasSize.value = { w, h }
-  }
-
-  const layoutPerPxX = (vb.right - vb.left) / w
-  const layoutPerPxY = (vb.bottom - vb.top) / h
-  const stepMx = pickTickStep(layoutPerPxX * meta.resolution)
-  const stepMy = pickTickStep(layoutPerPxY * meta.resolution)
-
-  // X ticks: конвертируем горизонтальный viewBox в метровый диапазон
-  const leftM = pixelToWorld(meta, vb.left, 0, H).x
-  const rightM = pixelToWorld(meta, vb.right, 0, H).x
-  const xArr = []
-  const startX = Math.ceil(leftM / stepMx) * stepMx
-  for (let m = startX; m <= rightM; m += stepMx) {
-    const layoutX = worldToPixel(meta, m, 0, H).u
-    const px = ((layoutX - vb.left) / (vb.right - vb.left)) * w
-    xArr.push({ px: Math.round(px), label: formatTick(m, stepMx) })
-    if (xArr.length > 60) break
-  }
-  xTicks.value = xArr
-
-  // Y ticks: аналогично, но помним что метровое Y инвертировано относительно v
-  const topM = pixelToWorld(meta, 0, vb.top, H).y
-  const bottomM = pixelToWorld(meta, 0, vb.bottom, H).y
-  const yArr = []
-  const minY = Math.min(topM, bottomM), maxY = Math.max(topM, bottomM)
-  const startY = Math.ceil(minY / stepMy) * stepMy
-  for (let m = startY; m <= maxY; m += stepMy) {
-    const layoutY = worldToPixel(meta, 0, m, H).v
-    const py = ((layoutY - vb.top) / (vb.bottom - vb.top)) * h
-    yArr.push({ py: Math.round(py), label: formatTick(m, stepMy) })
-    if (yArr.length > 60) break
-  }
-  yTicks.value = yArr
-}
-function formatTick(m, step) {
-  if (step >= 1) return m.toFixed(0) + 'm'
-  if (step >= 0.1) return m.toFixed(1) + 'm'
-  return m.toFixed(2) + 'm'
-}
+// Метровые линейки — в composables/useAxisTicks (сам стартует и останавливает интервал)
+const { xTicks, yTicks } = useAxisTicks(graph, map)
 
 // === Zoom controls ===
 function zoomIn() {
@@ -707,8 +599,57 @@ function doExportLif() {
   downloadJson(`${map.value.name.replace(/\s+/g, '_')}.lif.json`, l)
   msg.success(`Exported LIF ${l.metaInformation.lifVersion}`)
 }
+function doExportLifMulti() {
+  if (!store.maps.length) return
+  const l = exportLifMulti(store.maps)
+  downloadJson(`fleet-manager-multi.lif.json`, l)
+  msg.success(`Exported multi-layout LIF: ${l.layouts.length} layouts`)
+}
 function saveToBackend() {
   msg.success(`Saved (mock). Backend: POST /api/maps/${map.value.id}`)
+}
+
+// === Import LIF: подмена nodes/edges/stations на данные из JSON-файла ===
+function doImportLif() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json,application/json'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    try {
+      const text = await file.text()
+      const lif = JSON.parse(text)
+      const layoutCount = Array.isArray(lif.layouts) ? lif.layouts.length : 0
+      let layoutIdx = 0
+      if (layoutCount > 1) {
+        const names = lif.layouts.map((l, i) => `${i}: ${l.layoutName || l.layoutId || 'layout'}`).join('\n')
+        const pick = prompt(
+          `Файл содержит ${layoutCount} layouts. Введи номер для импорта (0..${layoutCount - 1}):\n\n${names}`,
+          '0'
+        )
+        if (pick === null) return
+        layoutIdx = Math.max(0, Math.min(layoutCount - 1, parseInt(pick, 10) || 0))
+      }
+      const parsed = parseLif(lif, map.value, layoutIdx)
+      const total = parsed.waypoints.length + parsed.stations.length
+      const existing = map.value.waypoints.length + (map.value.stations?.length || 0)
+      if (existing > 0 && !confirm(
+        `Заменить содержимое карты (layout "${parsed.layoutName || layoutIdx}")?\n\nСейчас: ${existing} нод/станций.\nВ файле: ${total} (+ ${parsed.edges.length} edges).`
+      )) return
+      store.update(map.value.id, {
+        waypoints: parsed.waypoints,
+        edges: parsed.edges,
+        stations: parsed.stations,
+      })
+      syncFromStore()
+      pushHistory()
+      msg.success(`Imported LIF: ${parsed.waypoints.length} nodes, ${parsed.edges.length} edges, ${parsed.stations.length} stations`)
+    } catch (e) {
+      msg.error('Import failed: ' + e.message)
+    }
+  }
+  input.click()
 }
 async function copyToClipboard(text, label) {
   try { await navigator.clipboard.writeText(text); msg.success(`${label} copied`) }
@@ -720,16 +661,21 @@ const fileMenu = [
   { label: 'Save', key: 'save' },
   { label: 'Preview JSON', key: 'preview' },
   { type: 'divider' },
+  { label: 'Import VDA5050 LIF…', key: 'import-lif' },
+  { type: 'divider' },
   { label: 'Export Nav2 GeoJSON', key: 'export-geo' },
-  { label: 'Export VDA5050 LIF', key: 'export-lif' },
+  { label: 'Export VDA5050 LIF (this map)', key: 'export-lif' },
+  { label: 'Export multi-layout LIF (all maps)', key: 'export-lif-multi' },
   { type: 'divider' },
   { label: '← Back to Maps', key: 'back' },
 ]
 function onFileMenu(key) {
   if (key === 'save') saveToBackend()
   else if (key === 'preview') showPreview.value = true
+  else if (key === 'import-lif') doImportLif()
   else if (key === 'export-geo') doExportGeoJson()
   else if (key === 'export-lif') doExportLif()
+  else if (key === 'export-lif-multi') doExportLifMulti()
   else if (key === 'back') router.push({ name: 'maps' })
 }
 
@@ -861,6 +807,65 @@ const connectedNodes = computed(() => {
   return [...set]
 })
 
+// === VDA5050 Actions на ноде ===
+function makeAction() {
+  return {
+    actionId: 'a-' + Math.random().toString(36).slice(2, 8),
+    actionType: '',
+    blockingType: 'NONE',
+    actionDescriptor: '',
+    actionParameters: [],
+  }
+}
+function updateWaypointActions(newActions) {
+  if (!selectedWaypoint.value) return
+  const list = map.value.waypoints.map((w) =>
+    w.id === selectedWaypoint.value.id ? { ...w, actions: newActions } : w
+  )
+  store.update(map.value.id, { waypoints: list })
+}
+function addAction() {
+  const current = selectedWaypoint.value?.actions || []
+  updateWaypointActions([...current, makeAction()])
+}
+function removeAction(idx) {
+  const current = [...(selectedWaypoint.value?.actions || [])]
+  current.splice(idx, 1)
+  updateWaypointActions(current)
+}
+function updateActionField(idx, field, val) {
+  const current = (selectedWaypoint.value?.actions || []).map((a, i) =>
+    i === idx ? { ...a, [field]: val } : a
+  )
+  updateWaypointActions(current)
+}
+function addActionParam(actIdx) {
+  const current = (selectedWaypoint.value?.actions || []).map((a, i) => {
+    if (i !== actIdx) return a
+    return { ...a, actionParameters: [...(a.actionParameters || []), { key: '', value: '' }] }
+  })
+  updateWaypointActions(current)
+}
+function removeActionParam(actIdx, paramIdx) {
+  const current = (selectedWaypoint.value?.actions || []).map((a, i) => {
+    if (i !== actIdx) return a
+    const params = [...(a.actionParameters || [])]
+    params.splice(paramIdx, 1)
+    return { ...a, actionParameters: params }
+  })
+  updateWaypointActions(current)
+}
+function updateActionParam(actIdx, paramIdx, field, val) {
+  const current = (selectedWaypoint.value?.actions || []).map((a, i) => {
+    if (i !== actIdx) return a
+    const params = (a.actionParameters || []).map((p, pi) =>
+      pi === paramIdx ? { ...p, [field]: val } : p
+    )
+    return { ...a, actionParameters: params }
+  })
+  updateWaypointActions(current)
+}
+
 function updateWaypointField(field, val) {
   if (!selectedWaypoint.value) return
   const list = map.value.waypoints.map((w) =>
@@ -951,12 +956,9 @@ onMounted(async () => {
   window.addEventListener('keydown', onKey)
   await new Promise((r) => setTimeout(r, 300))
   fitToMap()
-  computeAxisTicks()
-  axisPollTimer = setInterval(computeAxisTicks, 200)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
-  if (axisPollTimer) clearInterval(axisPollTimer)
 })
 
 // Курсор в мировых координатах — через translateFromDomToSvgCoordinates
@@ -1140,7 +1142,14 @@ const TOOLS = [
       <div class="flex items-center gap-2 text-xs text-slate-600">
         Grid step
         <input type="range" min="0.1" max="10" step="0.1" v-model.number="gridInterval" class="w-24 accent-brand-800" />
-        <span class="w-12 font-mono text-[10px] text-slate-500">{{ gridInterval }} m</span>
+        <input
+          type="number"
+          min="0.01" max="1000" step="0.1"
+          :value="gridInterval"
+          @input="gridInterval = Math.max(0.01, Number($event.target.value) || 0.01)"
+          class="w-14 rounded border border-slate-200 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 focus:border-brand-800 focus:outline-none"
+        />
+        <span class="text-[10px] text-slate-500">m</span>
       </div>
 
       <div class="flex-1" />
@@ -1400,13 +1409,60 @@ const TOOLS = [
                 </div>
               </div>
               <div>
-                <div class="mb-1 text-xs text-slate-500">Vehicle Type Node Properties</div>
-                <button
-                  class="flex w-full items-center justify-center gap-2 rounded border border-dashed border-slate-300 py-2 text-xs text-slate-500 hover:border-brand-800 hover:text-brand-800"
-                  @click="msg.info('VDA5050 vehicle properties editor — coming next iteration')"
-                >
-                  + Add
-                </button>
+                <div class="mb-1 text-xs text-slate-500">
+                  VDA5050 Actions ({{ (selectedWaypoint.actions || []).length }})
+                </div>
+                <div class="space-y-2">
+                  <div
+                    v-for="(a, i) in (selectedWaypoint.actions || [])"
+                    :key="i"
+                    class="rounded border border-slate-200 p-2"
+                  >
+                    <div class="mb-2 flex items-center gap-1">
+                      <NInput
+                        :value="a.actionType"
+                        @update:value="(v) => updateActionField(i, 'actionType', v)"
+                        size="tiny" placeholder="pick / drop / charge / wait…"
+                        style="flex: 1"
+                      />
+                      <select
+                        class="rounded border border-slate-200 px-1 py-1 text-[10px] font-mono"
+                        :value="a.blockingType"
+                        @change="updateActionField(i, 'blockingType', $event.target.value)"
+                      >
+                        <option>NONE</option><option>SOFT</option>
+                        <option>SINGLE</option><option>HARD</option>
+                      </select>
+                      <button
+                        class="rounded p-1 text-red-500 hover:bg-red-50"
+                        @click="removeAction(i)" title="Delete action"
+                      >×</button>
+                    </div>
+                    <div class="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                      Params
+                      <button class="text-brand-800 hover:underline" @click="addActionParam(i)">
+                        + param
+                      </button>
+                    </div>
+                    <div
+                      v-for="(p, pi) in (a.actionParameters || [])"
+                      :key="pi"
+                      class="mb-1 flex gap-1"
+                    >
+                      <NInput :value="p.key" @update:value="(v) => updateActionParam(i, pi, 'key', v)"
+                              size="tiny" placeholder="key" style="flex: 1" />
+                      <NInput :value="p.value" @update:value="(v) => updateActionParam(i, pi, 'value', v)"
+                              size="tiny" placeholder="value" style="flex: 2" />
+                      <button class="rounded px-1 text-red-500 hover:bg-red-50" @click="removeActionParam(i, pi)">×</button>
+                    </div>
+                  </div>
+                  <button
+                    class="flex w-full items-center justify-center gap-2 rounded border border-dashed border-slate-300 py-1.5 text-xs text-slate-500 hover:border-brand-800 hover:text-brand-800"
+                    @click="addAction"
+                  >
+                    + Add action
+                  </button>
+                </div>
               </div>
               <div class="mt-2 flex gap-2">
                 <button class="flex-1 rounded bg-brand-800 py-2 text-sm text-white hover:bg-brand-900" @click="saveToBackend">Save</button>

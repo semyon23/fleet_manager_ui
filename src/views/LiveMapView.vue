@@ -4,6 +4,7 @@ import { useMapsStore } from '../stores/maps'
 import { NCard, NTag, NSelect } from 'naive-ui'
 import { ref, computed, watchEffect } from 'vue'
 import { spriteFor, previewSpriteFor, tintStyle } from '../lib/robotSprite'
+import { stationKindMeta } from '../lib/theme'
 
 const robots = useRobotsStore()
 const maps = useMapsStore()
@@ -40,20 +41,14 @@ const filteredRobots = computed(() => {
   return robots.robots.filter((r) => activeMap.value.assignedRobots.includes(r.id))
 })
 
-// === Stations под тем же rounded-square + icon паттерном что в редакторе ===
-const STATION_META = {
-  charge:  { color: '#059669', icon: 'bolt' },
-  loading: { color: '#ea580c', icon: 'loading' },
-  parking: { color: '#dc2626', icon: 'p' },
-  custom:  { color: '#2563eb', icon: 'star' },
-}
+// Stations — та же палитра что в редакторе (см. lib/theme.js)
 // PGM-пиксели → SVG-координаты (та же трансформация что у background image)
 const pgmScale = computed(() => (activeMap.value ? 580 / activeMap.value.width : 1))
 const stations = computed(() => {
   if (!activeMap.value?.stations?.length) return []
   const s = pgmScale.value
   return activeMap.value.stations.map((st) => {
-    const meta = STATION_META[st.kind] || STATION_META.custom
+    const meta = stationKindMeta(st.kind)
     return {
       id: st.id,
       name: st.name || st.id,
