@@ -165,7 +165,7 @@ function onViewClick(evt) {
   if (!pos) return
   const u = pos.x, v = pos.y
 
-  if (tool.value === 'node') {
+  if (tool.value === 'node' || tool.value === 'batch-points' || tool.value === 'batch-lines') {
     createNodeAt(u, v)
   } else if (tool.value === 'station') {
     createStationAt(u, v)
@@ -203,13 +203,23 @@ function addEdgeToGraph(e) {
   }))
 }
 
+// Определяем нужно ли автосвязывать новую ноду с предыдущей выделенной:
+// - batch-lines: всегда да (полилиния)
+// - batch-points: всегда нет (только точки)
+// - node: как в тумблере Fast Create
+function shouldAutoConnect() {
+  if (tool.value === 'batch-lines') return true
+  if (tool.value === 'batch-points') return false
+  return fastCreate.value
+}
+
 function createNodeAt(u, v) {
   const id = 'n' + Math.floor(Math.random() * 9999) + '_' + Math.floor(Math.random() * 9999)
   const wp = { id, u, v, name: id, description: '', mapId: '' }
 
   // Собираем возможные edges для fast-create
   const addedEdges = []
-  if (fastCreate.value && selectedNodes.value.length === 1) {
+  if (shouldAutoConnect() && selectedNodes.value.length === 1) {
     const fromId = selectedNodes.value[0]
     const fromExists = map.value.waypoints.some((x) => x.id === fromId) ||
       (map.value.stations || []).some((s) => s.id === fromId)
@@ -274,7 +284,7 @@ function onNodeClick({ node }) {
     }
     return
   }
-  if (tool.value === 'node' && fastCreate.value && selectedNodes.value.length === 1 && selectedNodes.value[0] !== node) {
+  if ((tool.value === 'node' || tool.value === 'batch-lines') && shouldAutoConnect() && selectedNodes.value.length === 1 && selectedNodes.value[0] !== node) {
     const eNew = makeEdge(selectedNodes.value[0], node)
     const added = [eNew]
     if (doubleWay.value) added.push(makeEdge(node, selectedNodes.value[0]))
@@ -588,6 +598,8 @@ function onKey(e) {
     selectedEdges.value = []
   } else if (e.key === 'v') tool.value = 'select'
   else if (e.key === 'n') tool.value = 'node'
+  else if (e.key === 'b') tool.value = 'batch-points'
+  else if (e.key === 'l') tool.value = 'batch-lines'
   else if (e.key === 'e') tool.value = 'edge'
   else if (e.key === 's') tool.value = 'station'
 }
@@ -632,6 +644,8 @@ function switchMap(id) {
 const TOOLS = [
   { key: 'select', label: 'Roam / Select (V) — pan by drag, click node to select', icon: 'cursor' },
   { key: 'node', label: 'Node (N)', icon: 'circle' },
+  { key: 'batch-points', label: 'Batch Points (B) — chain of standalone nodes, no auto-edges', icon: 'batch-points' },
+  { key: 'batch-lines', label: 'Batch Lines (L) — polyline: each click adds node + edge to prev', icon: 'batch-lines' },
   { key: 'edge', label: 'Edge (E)', icon: 'arrow' },
   { key: 'station', label: 'Station (S)', icon: 'square' },
 ]
@@ -692,6 +706,8 @@ const TOOLS = [
       >
         <svg v-if="t.icon === 'cursor'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.5 18 2.4-8.1L21 10.5 3 3z"/></svg>
         <svg v-if="t.icon === 'circle'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+        <svg v-if="t.icon === 'batch-points'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="5" r="2.2"/><circle cx="12" cy="9" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="7" cy="16" r="2.2"/><circle cx="16" cy="19" r="2.2"/></svg>
+        <svg v-if="t.icon === 'batch-lines'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18L9 8l4 6 7-10"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/><circle cx="9" cy="8" r="1.6" fill="currentColor"/><circle cx="13" cy="14" r="1.6" fill="currentColor"/><circle cx="20" cy="4" r="1.6" fill="currentColor"/></svg>
         <svg v-if="t.icon === 'arrow'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         <svg v-if="t.icon === 'square'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
       </button>
