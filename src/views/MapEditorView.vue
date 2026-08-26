@@ -832,11 +832,6 @@ const TOOLS = [
           </template>
         </v-network-graph>
 
-        <!-- Cursor hint внизу -->
-        <div v-if="cursorWorld" class="pointer-events-none absolute bottom-2 left-3 rounded bg-slate-900 px-2 py-1 font-mono text-[10px] text-emerald-200">
-          {{ cursorWorld.x.toFixed(3) }} m, {{ cursorWorld.y.toFixed(3) }} m
-        </div>
-
         <!-- Tool hint -->
         <div class="pointer-events-none absolute bottom-2 right-3 rounded bg-white px-2 py-1 text-[10px] text-slate-500 shadow">
           Tool: <span class="font-semibold">{{ TOOLS.find(t => t.key === tool)?.label }}</span>
