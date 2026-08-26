@@ -93,9 +93,32 @@ function snapUV(u, v) {
 // Edge draft (для tool='edge' — держим первую выбранную ноду)
 let pendingEdgeStart = null
 
+// Копипаст: копируем выделенное в JS-переменную (не в system clipboard,
+// чтобы работало offline и не требовало permissions). Paste ставит клон
+// со сдвигом offset пиксельным и обновляет ID через nextNodeId/nextStationId.
+const clipboardItems = ref({ waypoints: [], stations: [], edges: [] })
+const PASTE_OFFSET_PX = 20  // ~1м при resolution=0.05
+
 // Preview JSON модалка
 const showPreview = ref(false)
 const previewTab = ref('geojson')
+const showHelp = ref(false)  // ? cheatsheet
+const SHORTCUTS = [
+  { keys: 'V', desc: 'Roam / Select — pan by drag, click node to select' },
+  { keys: 'N', desc: 'Node — одиночная точка' },
+  { keys: 'B', desc: 'Batch Points — цепочка отдельных точек' },
+  { keys: 'L', desc: 'Batch Lines — polyline (точка + edge к предыдущей)' },
+  { keys: 'E', desc: 'Edge — соединить 2 существующие ноды' },
+  { keys: 'S', desc: 'Station' },
+  { keys: 'M', desc: 'Box select — обвести ноды прямоугольником' },
+  { keys: 'Del', desc: 'Удалить выделенное' },
+  { keys: 'Esc', desc: 'Снять выделение / отменить draft edge' },
+  { keys: 'Ctrl+Z', desc: 'Undo' },
+  { keys: 'Ctrl+Y или Ctrl+Shift+Z', desc: 'Redo' },
+  { keys: 'Ctrl+C', desc: 'Копировать выделенные ноды' },
+  { keys: 'Ctrl+V', desc: 'Вставить с оффсетом' },
+  { keys: '?', desc: 'Эта справка' },
+]
 const previewGeoJson = computed(() => {
   if (!map.value) return ''
   try { return JSON.stringify(exportNav2GeoJson(map.value), null, 2) }
@@ -377,6 +400,107 @@ function onNodeDragEnd() {
   pushHistory()
 }
 
+// === Rubber-band multi-select через встроенный v-network-graph API ===
+// Одноразовый режим: клик кнопки → следующий drag выделяет ноды в прямоугольнике,
+// потом автоматически возвращаемся в normal.
+function startBoxSelect() {
+  if (!graph.value) return
+  try {
+    graph.value.startBoxSelection({
+      stop: 'pointerup',
+      type: 'append',
+      withShiftKey: 'invert',
+    })
+    msg.info('Draw a box to select nodes')
+  } catch (e) {
+    msg.error('Box selection unavailable: ' + e.message)
+  }
+}
+
+// === Align tools ===
+// Выравнивает выделенные ноды (waypoints и stations) по X (вертикальная линия)
+// или по Y (горизонтальная). Точка выравнивания — среднее значение по группе.
+function alignSelected(axis /* 'x' | 'y' */) {
+  if (!map.value) return
+  const ids = new Set(selectedNodes.value)
+  if (ids.size < 2) { msg.info('Select at least 2 nodes to align'); return }
+
+  // Собираем текущие позиции из layouts (актуальнее чем из store после drag)
+  const positions = [...ids].map((id) => layouts.nodes[id]).filter(Boolean)
+  if (!positions.length) return
+  const target = axis === 'x'
+    ? positions.reduce((s, p) => s + p.x, 0) / positions.length
+    : positions.reduce((s, p) => s + p.y, 0) / positions.length
+
+  const wUpd = map.value.waypoints.map((w) => {
+    if (!ids.has(w.id)) return w
+    return axis === 'x' ? { ...w, u: target } : { ...w, v: target }
+  })
+  const sUpd = (map.value.stations || []).map((s) => {
+    if (!ids.has(s.id)) return s
+    return axis === 'x' ? { ...s, u: target } : { ...s, v: target }
+  })
+  // Синхронизируем layouts сразу чтобы v-network-graph подхватил
+  for (const id of ids) {
+    const lp = layouts.nodes[id]
+    if (lp) layouts.nodes[id] = axis === 'x' ? { x: target, y: lp.y } : { x: lp.x, y: target }
+  }
+  store.update(map.value.id, { waypoints: wUpd, stations: sUpd })
+  pushHistory()
+  msg.success(`Aligned ${ids.size} nodes on ${axis.toUpperCase()}`)
+}
+
+function copySelected() {
+  if (!map.value) return
+  const ids = new Set(selectedNodes.value)
+  if (!ids.size) { msg.info('Nothing to copy'); return }
+  const wps = map.value.waypoints.filter((w) => ids.has(w.id))
+  const sts = (map.value.stations || []).filter((s) => ids.has(s.id))
+  // Копируем ТОЛЬКО те edges, у которых оба конца попадают в выделение
+  const es = map.value.edges.filter((e) => ids.has(e.from) && ids.has(e.to))
+  clipboardItems.value = {
+    waypoints: wps.map((w) => ({ ...w })),
+    stations: sts.map((s) => ({ ...s })),
+    edges: es.map((e) => ({ ...e })),
+  }
+  msg.success(`Copied ${wps.length + sts.length} nodes, ${es.length} edges`)
+}
+function pasteClipboard() {
+  if (!map.value) return
+  const clip = clipboardItems.value
+  if (!clip.waypoints.length && !clip.stations.length) return
+  const idMap = {}  // старый ID → новый
+  const newWps = clip.waypoints.map((w) => {
+    const nid = newNodeId()
+    idMap[w.id] = nid
+    return { ...w, id: nid, name: nid, u: w.u + PASTE_OFFSET_PX, v: w.v + PASTE_OFFSET_PX }
+  })
+  const newSts = clip.stations.map((s) => {
+    const nid = newStationId()
+    idMap[s.id] = nid
+    return { ...s, id: nid, name: nid, u: s.u + PASTE_OFFSET_PX, v: s.v + PASTE_OFFSET_PX }
+  })
+  const newEdges = clip.edges
+    .filter((e) => idMap[e.from] && idMap[e.to])
+    .map((e) => ({
+      ...e,
+      id: idMap[e.from] + '_' + idMap[e.to],
+      from: idMap[e.from],
+      to: idMap[e.to],
+    }))
+  store.update(map.value.id, {
+    waypoints: [...map.value.waypoints, ...newWps],
+    stations: [...(map.value.stations || []), ...newSts],
+    edges: [...map.value.edges, ...newEdges],
+  })
+  for (const w of newWps) addNodeToGraph(w)
+  for (const s of newSts) addStationToGraph(s)
+  for (const e of newEdges) addEdgeToGraph(e)
+  selectedNodes.value = [...newWps.map((w) => w.id), ...newSts.map((s) => s.id)]
+  pushHistory()
+  msg.success(`Pasted ${newWps.length + newSts.length} nodes, ${newEdges.length} edges`)
+}
+
 function deleteSelected() {
   if (!map.value) return
   const nIds = new Set(selectedNodes.value)
@@ -638,11 +762,13 @@ function onViewMenu(key) {
 }
 
 const helpMenu = [
+  { label: 'Keyboard shortcuts (?)', key: 'shortcuts' },
   { label: 'Docs', key: 'docs' },
   { label: 'About', key: 'about' },
 ]
 function onHelpMenu(k) {
-  if (k === 'docs') msg.info('See docs/ folder in repo')
+  if (k === 'shortcuts') showHelp.value = true
+  else if (k === 'docs') msg.info('See docs/ folder in repo')
   else if (k === 'about') msg.info('Fleet Manager · Map Editor · VDA5050 LIF + Nav2 GeoJSON')
 }
 
@@ -671,11 +797,38 @@ function selectNode(id) {
   selectedNodes.value = [id]
   selectedEdges.value = []
   tool.value = 'select'
+  panToNode(id)
 }
 function selectEdge(id) {
   selectedEdges.value = [id]
   selectedNodes.value = []
   tool.value = 'select'
+  // Панимся к середине edge (усредняем позиции from/to)
+  const e = map.value?.edges.find((x) => x.id === id)
+  if (e) {
+    const a = layouts.nodes[e.from]
+    const b = layouts.nodes[e.to]
+    if (a && b) panToLayout((a.x + b.x) / 2, (a.y + b.y) / 2)
+  }
+}
+function panToNode(id) {
+  const p = layouts.nodes[id]
+  if (p) panToLayout(p.x, p.y)
+}
+// Центрирует viewbox на заданной layout-точке, сохраняя текущий масштаб.
+function panToLayout(x, y) {
+  if (!graph.value) return
+  try {
+    const vb = graph.value.getViewBox()
+    const w = vb.right - vb.left
+    const h = vb.bottom - vb.top
+    graph.value.setViewBox({
+      left: x - w / 2,
+      top: y - h / 2,
+      right: x + w / 2,
+      bottom: y + h / 2,
+    })
+  } catch {}
 }
 
 // === Right sidebar Edit form ===
@@ -769,6 +922,12 @@ function onKey(e) {
       ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')) {
     e.preventDefault(); redo(); return
   }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    e.preventDefault(); copySelected(); return
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+    e.preventDefault(); pasteClipboard(); return
+  }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault(); deleteSelected()
   } else if (e.key === 'Escape') {
@@ -781,6 +940,8 @@ function onKey(e) {
   else if (e.key === 'l') tool.value = 'batch-lines'
   else if (e.key === 'e') tool.value = 'edge'
   else if (e.key === 's') tool.value = 'station'
+  else if (e.key === 'm') startBoxSelect()
+  else if (e.key === '?') showHelp.value = true
 }
 
 onMounted(async () => {
@@ -904,6 +1065,20 @@ const TOOLS = [
       </button>
       <button class="tool-btn text-red-600" @click="deleteSelected" title="Delete (Del)">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6v14a2 2 0 002 2h8a2 2 0 002-2V6"/></svg>
+      </button>
+
+      <div class="mx-2 h-6 w-px bg-slate-200" />
+
+      <button class="tool-btn" @click="startBoxSelect" title="Box select (M) — draw a rectangle to select multiple nodes">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1" stroke-dasharray="3 3"/><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="14" cy="14" r="1.5" fill="currentColor"/></svg>
+      </button>
+
+      <!-- Align tools: работают когда выделено >= 2 нод -->
+      <button class="tool-btn" @click="alignSelected('x')" :disabled="selectedNodes.length < 2" title="Align vertically (same X — column)">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><circle cx="12" cy="6" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="18" r="2" fill="currentColor"/></svg>
+      </button>
+      <button class="tool-btn" @click="alignSelected('y')" :disabled="selectedNodes.length < 2" title="Align horizontally (same Y — row)">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><circle cx="6" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="18" cy="12" r="2" fill="currentColor"/></svg>
       </button>
 
       <div class="mx-2 h-6 w-px bg-slate-200" />
@@ -1355,6 +1530,21 @@ const TOOLS = [
           </div>
         </NTabPane>
       </NTabs>
+    </NModal>
+
+    <NModal
+      v-model:show="showHelp"
+      preset="card"
+      title="Keyboard shortcuts"
+      style="width: 560px"
+      :bordered="false"
+    >
+      <div class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
+        <template v-for="s in SHORTCUTS" :key="s.keys">
+          <kbd class="rounded border border-slate-300 bg-slate-50 px-2 py-0.5 font-mono text-xs">{{ s.keys }}</kbd>
+          <span class="text-slate-700">{{ s.desc }}</span>
+        </template>
+      </div>
     </NModal>
   </div>
 </template>

@@ -40,6 +40,32 @@ const filteredRobots = computed(() => {
   return robots.robots.filter((r) => activeMap.value.assignedRobots.includes(r.id))
 })
 
+// === Stations под тем же rounded-square + icon паттерном что в редакторе ===
+const STATION_META = {
+  charge:  { color: '#059669', icon: 'bolt' },
+  loading: { color: '#ea580c', icon: 'loading' },
+  parking: { color: '#dc2626', icon: 'p' },
+  custom:  { color: '#2563eb', icon: 'star' },
+}
+// PGM-пиксели → SVG-координаты (та же трансформация что у background image)
+const pgmScale = computed(() => (activeMap.value ? 580 / activeMap.value.width : 1))
+const stations = computed(() => {
+  if (!activeMap.value?.stations?.length) return []
+  const s = pgmScale.value
+  return activeMap.value.stations.map((st) => {
+    const meta = STATION_META[st.kind] || STATION_META.custom
+    return {
+      id: st.id,
+      name: st.name || st.id,
+      kind: st.kind,
+      x: 60 + st.u * s,
+      y: 60 + st.v * s,
+      color: meta.color,
+      icon: meta.icon,
+    }
+  })
+})
+
 const markers = computed(() =>
   filteredRobots.value.map((r) => ({
     ...r,
@@ -124,6 +150,23 @@ const markers = computed(() =>
             <rect x="450" y="400" width="150" height="100" fill="#fef3c7" stroke="#eab308" stroke-dasharray="4 4" />
             <text x="460" y="425" font-size="11" fill="#92400e" font-family="monospace">LOADING</text>
           </template>
+
+          <!-- Stations из карты — rounded square + белая иконка типа -->
+          <g v-for="st in stations" :key="st.id" :transform="`translate(${st.x} ${st.y})`">
+            <rect x="-14" y="-14" width="28" height="28" rx="5"
+                  :fill="st.color" stroke="#ffffff" stroke-width="1.5"
+                  filter="drop-shadow(0 1px 2px rgba(0,0,0,0.25))" />
+            <g fill="#ffffff" stroke="none" pointer-events="none">
+              <path v-if="st.icon === 'bolt'" d="M-3 -8 L 4 -1 L 0 -1 L 3 8 L -4 1 L 0 1 Z" />
+              <text v-else-if="st.icon === 'p'" x="0" y="4" text-anchor="middle"
+                    font-size="14" font-weight="700" font-family="system-ui, sans-serif">P</text>
+              <path v-else-if="st.icon === 'loading'" d="M0 -8 L 3.5 -2.5 L 1 -2.5 L 1 2.5 L 3.5 2.5 L 0 8 L -3.5 2.5 L -1 2.5 L -1 -2.5 L -3.5 -2.5 Z" />
+              <polygon v-else-if="st.icon === 'star'" points="0,-8 2.3,-2.5 8,-2.5 3.4,1 5.2,6.5 0,3.2 -5.2,6.5 -3.4,1 -8,-2.5 -2.3,-2.5" />
+            </g>
+            <text y="24" text-anchor="middle" font-size="9" font-family="JetBrains Mono, monospace" fill="#475569">
+              {{ st.name }}
+            </text>
+          </g>
 
           <g
             v-for="m in markers"
