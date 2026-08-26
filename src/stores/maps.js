@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 const LS_KEY = 'fm.maps.v1'
+const PERSIST_DEBOUNCE_MS = 250
 
 function loadFromStorage() {
   try {
@@ -19,8 +20,32 @@ function loadFromStorage() {
   }
 }
 
+// Дебаунс + flush на unload/hidden — при drag ноды store.update()
+// вызывается ~60 раз/сек, синхронный localStorage.setItem() лагает главный тред.
+let persistTimer = null
+let pendingList = null
 function persist(list) {
-  localStorage.setItem(LS_KEY, JSON.stringify(list))
+  pendingList = list
+  if (persistTimer) return
+  persistTimer = setTimeout(() => {
+    if (pendingList) localStorage.setItem(LS_KEY, JSON.stringify(pendingList))
+    persistTimer = null
+    pendingList = null
+  }, PERSIST_DEBOUNCE_MS)
+}
+function persistNow() {
+  if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
+  if (pendingList) {
+    localStorage.setItem(LS_KEY, JSON.stringify(pendingList))
+    pendingList = null
+  }
+}
+if (typeof window !== 'undefined') {
+  // Не потерять последние правки при закрытии вкладки
+  window.addEventListener('beforeunload', persistNow)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persistNow()
+  })
 }
 
 function newId() {

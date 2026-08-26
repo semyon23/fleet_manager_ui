@@ -2,9 +2,10 @@
 import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMapsStore } from '../stores/maps'
-import { pixelToWorld } from '../lib/nav2meta'
+import { pixelToWorld, worldToPixel } from '../lib/nav2meta'
 import { exportNav2GeoJson, downloadJson } from '../lib/exportGeoJson'
 import { exportLif } from '../lib/exportLif'
+import { validateMap } from '../lib/validateMap'
 import { graphConfigs } from '../lib/graphConfig'
 import {
   NButton,
@@ -48,6 +49,46 @@ const showBackground = ref(true)  // SLAM PGM подложка
 // showNodes / showEdges убраны — computed-обёртка ломала реактивность
 // v-network-graph. При необходимости показ можно сделать через configs.opacity.
 const gridInterval = ref(1)
+const snapToGrid = ref(false)
+const sequentialIds = ref(true)  // n001, n002... вместо n8519_7388
+
+// Возвращает следующий свободный ID вида prefix + zero-padded число.
+// Смотрит существующие ноды и станции чтобы не столкнуться.
+function nextSequentialId(prefix) {
+  const existing = new Set([
+    ...map.value.waypoints.map((w) => w.id),
+    ...(map.value.stations || []).map((s) => s.id),
+  ])
+  const re = new RegExp('^' + prefix + '(\\d+)$')
+  let max = 0
+  for (const id of existing) {
+    const m = id.match(re)
+    if (m) max = Math.max(max, parseInt(m[1], 10))
+  }
+  const next = max + 1
+  return prefix + String(next).padStart(3, '0')
+}
+function randomId(prefix) {
+  return prefix + Math.floor(Math.random() * 9999) + '_' + Math.floor(Math.random() * 9999)
+}
+function newNodeId() {
+  return sequentialIds.value ? nextSequentialId('n') : randomId('n')
+}
+function newStationId() {
+  return sequentialIds.value ? nextSequentialId('s') : randomId('s')
+}
+
+// Округляет пиксельные (u, v) координаты к ближайшей вершине сетки.
+// Шаг сетки в метрах = gridInterval, конвертируется в пиксели через meta.resolution.
+function snapUV(u, v) {
+  if (!snapToGrid.value || !map.value?.meta) return { u, v }
+  const stepPx = gridInterval.value / map.value.meta.resolution
+  if (!stepPx || stepPx < 0.001) return { u, v }
+  return {
+    u: Math.round(u / stepPx) * stepPx,
+    v: Math.round(v / stepPx) * stepPx,
+  }
+}
 
 // Edge draft (для tool='edge' — держим первую выбранную ноду)
 let pendingEdgeStart = null
@@ -65,23 +106,43 @@ const previewLif = computed(() => {
   try { return JSON.stringify(exportLif(map.value), null, 2) }
   catch (e) { return `// error: ${e.message}` }
 })
+const validation = computed(() => {
+  if (!map.value) return { errors: [], warnings: [] }
+  return validateMap(map.value)
+})
 
-// История для undo/redo
+// === Undo/Redo — shallow snapshot ===
+// Все мутации в store делаются через spread `[...arr, new]` или `.map(...)` —
+// новые массивы, а не изменённые старые. Значит достаточно сохранять
+// ссылки на массивы, а не deep-copy каждого элемента. При 500 нодах это
+// экономит ~5мс на снапшоте (deep clone был O(n) на каждый push).
+// Плюс dedup: если ссылки не изменились — не пушим лишний снапшот.
 const history = ref([])
 const historyIdx = ref(-1)
+const HISTORY_LIMIT = 50
+
 function snapshotFromMap(m) {
   return {
-    waypoints: m.waypoints.map((w) => ({ ...w })),
-    edges: m.edges.map((e) => ({ ...e })),
-    stations: (m.stations || []).map((s) => ({ ...s })),
+    waypoints: m.waypoints,
+    edges: m.edges,
+    stations: m.stations || [],
   }
+}
+function snapshotsEqual(a, b) {
+  return a && b &&
+    a.waypoints === b.waypoints &&
+    a.edges === b.edges &&
+    a.stations === b.stations
 }
 function pushHistory() {
   if (!map.value) return
+  const snap = snapshotFromMap(map.value)
+  const prev = history.value[historyIdx.value]
+  if (snapshotsEqual(prev, snap)) return  // ничего не поменялось
   history.value = history.value.slice(0, historyIdx.value + 1)
-  history.value.push(snapshotFromMap(map.value))
+  history.value.push(snap)
   historyIdx.value = history.value.length - 1
-  if (history.value.length > 50) {
+  if (history.value.length > HISTORY_LIMIT) {
     history.value.shift()
     historyIdx.value--
   }
@@ -98,10 +159,11 @@ function redo() {
 }
 function applySnapshot(snap) {
   if (!map.value) return
+  // Передаём ссылки как есть — store сам сделает новый spread при апдейте
   store.update(map.value.id, {
-    waypoints: [...snap.waypoints],
-    edges: [...snap.edges],
-    stations: [...snap.stations],
+    waypoints: snap.waypoints,
+    edges: snap.edges,
+    stations: snap.stations,
   })
   syncFromStore()
 }
@@ -163,7 +225,8 @@ function onViewClick(evt) {
   if (!map.value) return
   const pos = eventToLayout(evt)
   if (!pos) return
-  const u = pos.x, v = pos.y
+  const snapped = snapUV(pos.x, pos.y)
+  const u = snapped.u, v = snapped.v
 
   if (tool.value === 'node' || tool.value === 'batch-points' || tool.value === 'batch-lines') {
     createNodeAt(u, v)
@@ -214,7 +277,7 @@ function shouldAutoConnect() {
 }
 
 function createNodeAt(u, v) {
-  const id = 'n' + Math.floor(Math.random() * 9999) + '_' + Math.floor(Math.random() * 9999)
+  const id = newNodeId()
   const wp = { id, u, v, name: id, description: '', mapId: '' }
 
   // Собираем возможные edges для fast-create
@@ -246,7 +309,7 @@ function createNodeAt(u, v) {
 }
 
 function createStationAt(u, v) {
-  const id = 's' + Math.floor(Math.random() * 9999) + '_' + Math.floor(Math.random() * 9999)
+  const id = newStationId()
   const station = {
     id, u, v, name: id, description: '',
     kind: nextStationKind.value,
@@ -298,11 +361,17 @@ function onNodeDragEnd() {
   if (!map.value) return
   const wUpd = map.value.waypoints.map((wp) => {
     const lp = layouts.nodes[wp.id]
-    return lp ? { ...wp, u: lp.x, v: lp.y } : wp
+    if (!lp) return wp
+    const s = snapUV(lp.x, lp.y)
+    if (snapToGrid.value) layouts.nodes[wp.id] = { x: s.u, y: s.v }
+    return { ...wp, u: s.u, v: s.v }
   })
-  const sUpd = (map.value.stations || []).map((s) => {
-    const lp = layouts.nodes[s.id]
-    return lp ? { ...s, u: lp.x, v: lp.y } : s
+  const sUpd = (map.value.stations || []).map((st) => {
+    const lp = layouts.nodes[st.id]
+    if (!lp) return st
+    const s = snapUV(lp.x, lp.y)
+    if (snapToGrid.value) layouts.nodes[st.id] = { x: s.u, y: s.v }
+    return { ...st, u: s.u, v: s.v }
   })
   store.update(map.value.id, { waypoints: wUpd, stations: sUpd })
   pushHistory()
@@ -378,6 +447,97 @@ const backgroundImage = computed(() =>
   } : null
 )
 
+// === Метровые линейки (X сверху, Y слева) ===
+// Опрашиваем viewBox каждые 200мс — v-network-graph не эмитит pan-события.
+// Дёшево: два массива тиков в reactive, DOM обновляется только когда изменились.
+const xTicks = ref([])
+const yTicks = ref([])
+const canvasSize = ref({ w: 0, h: 0 })
+let axisPollTimer = null
+
+// Красивый шаг тиков: подбираем ближайший из [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100]
+// исходя из желаемого расстояния между тиками (~90px).
+const TICK_STEPS = [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500]
+function pickTickStep(metersPerPx, targetPx = 90) {
+  const desiredMeters = metersPerPx * targetPx
+  for (const s of TICK_STEPS) if (s >= desiredMeters) return s
+  return TICK_STEPS[TICK_STEPS.length - 1]
+}
+
+function computeAxisTicks() {
+  if (!graph.value || !map.value) return
+  let vb, sizes
+  try {
+    vb = graph.value.getViewBox()
+    sizes = graph.value.getSizes()
+  } catch { return }
+  if (!vb || !sizes) return
+  const w = sizes.width, h = sizes.height
+  const meta = map.value.meta
+  const H = map.value.height
+
+  if (canvasSize.value.w !== w || canvasSize.value.h !== h) {
+    canvasSize.value = { w, h }
+  }
+
+  const layoutPerPxX = (vb.right - vb.left) / w
+  const layoutPerPxY = (vb.bottom - vb.top) / h
+  const stepMx = pickTickStep(layoutPerPxX * meta.resolution)
+  const stepMy = pickTickStep(layoutPerPxY * meta.resolution)
+
+  // X ticks: конвертируем горизонтальный viewBox в метровый диапазон
+  const leftM = pixelToWorld(meta, vb.left, 0, H).x
+  const rightM = pixelToWorld(meta, vb.right, 0, H).x
+  const xArr = []
+  const startX = Math.ceil(leftM / stepMx) * stepMx
+  for (let m = startX; m <= rightM; m += stepMx) {
+    const layoutX = worldToPixel(meta, m, 0, H).u
+    const px = ((layoutX - vb.left) / (vb.right - vb.left)) * w
+    xArr.push({ px: Math.round(px), label: formatTick(m, stepMx) })
+    if (xArr.length > 60) break
+  }
+  xTicks.value = xArr
+
+  // Y ticks: аналогично, но помним что метровое Y инвертировано относительно v
+  const topM = pixelToWorld(meta, 0, vb.top, H).y
+  const bottomM = pixelToWorld(meta, 0, vb.bottom, H).y
+  const yArr = []
+  const minY = Math.min(topM, bottomM), maxY = Math.max(topM, bottomM)
+  const startY = Math.ceil(minY / stepMy) * stepMy
+  for (let m = startY; m <= maxY; m += stepMy) {
+    const layoutY = worldToPixel(meta, 0, m, H).v
+    const py = ((layoutY - vb.top) / (vb.bottom - vb.top)) * h
+    yArr.push({ py: Math.round(py), label: formatTick(m, stepMy) })
+    if (yArr.length > 60) break
+  }
+  yTicks.value = yArr
+}
+function formatTick(m, step) {
+  if (step >= 1) return m.toFixed(0) + 'm'
+  if (step >= 0.1) return m.toFixed(1) + 'm'
+  return m.toFixed(2) + 'm'
+}
+
+// === Zoom controls ===
+function zoomIn() {
+  try { graph.value?.zoomIn() } catch {}
+}
+function zoomOut() {
+  try { graph.value?.zoomOut() } catch {}
+}
+// Ставит зум 1:1 — 1 layout unit (1 пиксель карты) = 1 CSS-пиксель на экране.
+// setViewBox width = SVG DOM width — тогда viewport покрывает столько unit,
+// сколько пикселей у SVG-элемента.
+function zoomOneToOne() {
+  if (!graph.value) return
+  try {
+    const sizes = graph.value.getSizes()
+    const w = sizes?.width || 800
+    const h = sizes?.height || 600
+    graph.value.setViewBox({ left: 0, top: 0, right: w, bottom: h })
+  } catch {}
+}
+
 // === fit-to-map ===
 function fitToMap() {
   if (!graph.value || !map.value) return
@@ -394,12 +554,31 @@ function fitToMap() {
 }
 
 // === Экспорт ===
+// Проверка перед экспортом. errors → показать модалку с подтверждением
+// или отказом. warnings → сообщение, но всё равно выгружаем.
+function checkBeforeExport() {
+  const v = validateMap(map.value)
+  if (v.errors.length) {
+    const list = v.errors.slice(0, 8).join('\n• ')
+    const more = v.errors.length > 8 ? `\n… и ещё ${v.errors.length - 8}` : ''
+    const ok = confirm(
+      `Найдено ${v.errors.length} ошибок:\n\n• ${list}${more}\n\nВсё равно экспортировать?`
+    )
+    return ok
+  }
+  if (v.warnings.length) {
+    msg.warning(`Экспортировано (${v.warnings.length} предупреждений — см. Preview JSON)`)
+  }
+  return true
+}
 function doExportGeoJson() {
+  if (!checkBeforeExport()) return
   const g = exportNav2GeoJson(map.value)
   downloadJson(`${map.value.name.replace(/\s+/g, '_')}.geojson`, g)
   msg.success(`Exported ${g.features.length} features`)
 }
 function doExportLif() {
+  if (!checkBeforeExport()) return
   const l = exportLif(map.value)
   downloadJson(`${map.value.name.replace(/\s+/g, '_')}.lif.json`, l)
   msg.success(`Exported LIF ${l.metaInformation.lifVersion}`)
@@ -611,9 +790,12 @@ onMounted(async () => {
   window.addEventListener('keydown', onKey)
   await new Promise((r) => setTimeout(r, 300))
   fitToMap()
+  computeAxisTicks()
+  axisPollTimer = setInterval(computeAxisTicks, 200)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
+  if (axisPollTimer) clearInterval(axisPollTimer)
 })
 
 // Курсор в мировых координатах — через translateFromDomToSvgCoordinates
@@ -745,6 +927,27 @@ const TOOLS = [
           <path d="M21 15V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h10"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
           <path d="M21 15l-5-5-9 9"/>
+        </svg>
+      </button>
+      <button
+        class="tool-btn"
+        :class="{ active: snapToGrid }"
+        @click="snapToGrid = !snapToGrid"
+        title="Snap to grid — новые точки и drag прилипают к сетке"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3v18h18M9 21V9M15 21V15M21 9H9M21 15H15"/>
+          <circle cx="9" cy="9" r="1.5" fill="currentColor"/>
+        </svg>
+      </button>
+      <button
+        class="tool-btn"
+        :class="{ active: sequentialIds }"
+        @click="sequentialIds = !sequentialIds"
+        title="Sequential IDs (n001, n002...) vs Random"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <text x="12" y="16" text-anchor="middle" font-size="11" font-weight="700" font-family="system-ui, sans-serif" fill="currentColor" stroke="none">#01</text>
         </svg>
       </button>
 
@@ -919,6 +1122,48 @@ const TOOLS = [
           Tool: <span class="font-semibold">{{ TOOLS.find(t => t.key === tool)?.label }}</span>
           <span v-if="pendingEdgeStart" class="ml-2 text-brand-800">— from {{ pendingEdgeStart }}</span>
         </div>
+
+        <!-- Метровая линейка X (сверху) -->
+        <div class="pointer-events-none absolute left-0 top-0 h-5 w-full border-b border-slate-200 bg-white/70 backdrop-blur-sm">
+          <div
+            v-for="(t, i) in xTicks"
+            :key="'x' + i"
+            class="absolute top-0 h-full text-[9px] font-mono text-slate-500"
+            :style="{ left: t.px + 'px' }"
+          >
+            <div class="absolute top-0 h-2 w-px bg-slate-300"></div>
+            <div class="absolute left-1 top-1">{{ t.label }}</div>
+          </div>
+        </div>
+
+        <!-- Метровая линейка Y (слева) -->
+        <div class="pointer-events-none absolute left-0 top-0 h-full w-8 border-r border-slate-200 bg-white/70 backdrop-blur-sm">
+          <div
+            v-for="(t, i) in yTicks"
+            :key="'y' + i"
+            class="absolute left-0 w-full text-[9px] font-mono text-slate-500"
+            :style="{ top: t.py + 'px' }"
+          >
+            <div class="absolute right-0 top-0 h-px w-2 bg-slate-300"></div>
+            <div class="absolute left-0.5 -top-1.5">{{ t.label }}</div>
+          </div>
+        </div>
+
+        <!-- Zoom controls -->
+        <div class="absolute right-3 top-3 flex flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-sm">
+          <button class="zoom-btn" @click="zoomIn" title="Zoom in">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button class="zoom-btn" @click="zoomOut" title="Zoom out">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+          </button>
+          <button class="zoom-btn" @click="zoomOneToOne" title="Zoom 1:1">
+            <span class="text-[9px] font-semibold">1:1</span>
+          </button>
+          <button class="zoom-btn" @click="fitToMap" title="Fit to map">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></svg>
+          </button>
+        </div>
       </main>
 
       <!-- RIGHT SIDEBAR — Edit form -->
@@ -1090,6 +1335,25 @@ const TOOLS = [
           </div>
           <pre class="max-h-[60vh] overflow-auto rounded bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-sky-200">{{ previewLif }}</pre>
         </NTabPane>
+        <NTabPane name="validate" :tab="`Validate (${validation.errors.length}⛔ / ${validation.warnings.length}⚠)`">
+          <div v-if="!validation.errors.length && !validation.warnings.length" class="rounded bg-emerald-50 p-4 text-sm text-emerald-800">
+            ✅ Всё чисто — экспортировать безопасно.
+          </div>
+          <div v-else class="space-y-3">
+            <div v-if="validation.errors.length">
+              <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-red-700">Errors ({{ validation.errors.length }})</div>
+              <ul class="space-y-1 rounded bg-red-50 p-3 text-xs text-red-900">
+                <li v-for="(e, i) in validation.errors" :key="'e' + i" class="font-mono">⛔ {{ e }}</li>
+              </ul>
+            </div>
+            <div v-if="validation.warnings.length">
+              <div class="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-700">Warnings ({{ validation.warnings.length }})</div>
+              <ul class="space-y-1 rounded bg-amber-50 p-3 text-xs text-amber-900">
+                <li v-for="(w, i) in validation.warnings" :key="'w' + i" class="font-mono">⚠ {{ w }}</li>
+              </ul>
+            </div>
+          </div>
+        </NTabPane>
       </NTabs>
     </NModal>
   </div>
@@ -1120,4 +1384,16 @@ const TOOLS = [
   opacity: 0.35;
   cursor: not-allowed;
 }
+.zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #475569;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.15s;
+}
+.zoom-btn:last-child { border-bottom: none; }
+.zoom-btn:hover { background: #f8fafc; }
 </style>
