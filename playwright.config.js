@@ -7,7 +7,10 @@ const CI = !!process.env.CI
  * в CI — тоже preview на порту 5175.
  * Live production можно проверять через BASE_URL=https://ddmsngr.github.io/fleet-manager
  */
-const BASE = process.env.BASE_URL || 'http://127.0.0.1:5175/fleet-manager'
+// Trailing slash важен: без него `page.goto('maps')` резолвится как
+// `http://127.0.0.1:5175/maps` (заменяет last segment), а не как
+// `.../fleet-manager/maps` — 404. С trailing slash "maps" → append.
+const BASE = process.env.BASE_URL || 'http://127.0.0.1:5175/fleet-manager/'
 
 export default defineConfig({
   testDir: './tests/e2e',

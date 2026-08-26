@@ -4,7 +4,7 @@ test.describe('Map Editor — базовые сценарии', () => {
   test.beforeEach(async ({ page, context }) => {
     // Чистая сессия — сбрасываем localStorage
     await context.clearCookies()
-    await page.goto('/maps')
+    await page.goto('maps')
     await page.evaluate(() => localStorage.clear())
     await page.reload()
     await page.getByText(/Warehouse 25/).first().waitFor({ timeout: 20_000 })
