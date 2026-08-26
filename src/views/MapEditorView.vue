@@ -105,15 +105,27 @@ function applySnapshot(snap) {
   syncFromStore()
 }
 
+// Палитра под HikVision MonitorClient — rounded square + white icon внутри.
+// Цветовое кодирование:
+//   charge  = зелёный (⚡)
+//   parking = красный (P)
+//   loading = оранжевый (↑↓)
+//   custom  = синий (★)
 const STATION_KINDS = [
-  { label: 'Charge', value: 'charge', color: '#eab308' },
-  { label: 'Loading', value: 'loading', color: '#f97316' },
-  { label: 'Parking', value: 'parking', color: '#8b5cf6' },
-  { label: 'Custom', value: 'custom', color: '#0ea5e9' },
+  { label: 'Charge',  value: 'charge',  color: '#059669', icon: 'bolt' },
+  { label: 'Loading', value: 'loading', color: '#ea580c', icon: 'loading' },
+  { label: 'Parking', value: 'parking', color: '#dc2626', icon: 'p' },
+  { label: 'Custom',  value: 'custom',  color: '#2563eb', icon: 'star' },
 ]
 const nextStationKind = ref('charge')
+function stationKindMeta(kind) {
+  return STATION_KINDS.find((k) => k.value === kind) || STATION_KINDS[3]
+}
 function stationColorFor(kind) {
-  return STATION_KINDS.find((k) => k.value === kind)?.color || '#0ea5e9'
+  return stationKindMeta(kind).color
+}
+function stationIconFor(kind) {
+  return stationKindMeta(kind).icon
 }
 
 // === sync store <-> v-network-graph ===
@@ -180,6 +192,7 @@ function addStationToGraph(s) {
     color: stationColorFor(s.kind),
     __kind: 'station',
     __stationKind: s.kind,
+    __stationIcon: stationIconFor(s.kind),
   }))
   layouts.nodes[s.id] = { x: s.u, y: s.v }
 }
@@ -828,6 +841,44 @@ const TOOLS = [
               :height="backgroundImage.height"
               opacity="0.55"
               pointer-events="none"
+            />
+          </template>
+
+          <!-- Кастомный рендер нод: waypoint = круг (дефолт из config),
+               station = rounded square + белая иконка типа.
+               Реализовано через #override-node — координаты (0,0) уже
+               центрированы в позиции ноды через parent <g transform="…"> -->
+          <template #override-node="{ nodeId, config }">
+            <template v-if="nodes[nodeId]?.__kind === 'station'">
+              <rect
+                x="-16" y="-16" width="32" height="32" rx="6"
+                :fill="nodes[nodeId].color"
+                stroke="#ffffff" stroke-width="1.5"
+              />
+              <!-- Иконка внутри квадрата -->
+              <g pointer-events="none" fill="#ffffff" stroke="none">
+                <template v-if="nodes[nodeId].__stationIcon === 'bolt'">
+                  <path d="M-3 -9 L 4 -1 L 0 -1 L 3 9 L -4 1 L 0 1 Z" />
+                </template>
+                <template v-else-if="nodes[nodeId].__stationIcon === 'p'">
+                  <text x="0" y="5" text-anchor="middle" font-size="16" font-weight="700" font-family="system-ui, sans-serif">P</text>
+                </template>
+                <template v-else-if="nodes[nodeId].__stationIcon === 'loading'">
+                  <path d="M0 -9 L 4 -3 L 1 -3 L 1 3 L 4 3 L 0 9 L -4 3 L -1 3 L -1 -3 L -4 -3 Z" />
+                </template>
+                <template v-else-if="nodes[nodeId].__stationIcon === 'star'">
+                  <polygon points="0,-9 2.6,-2.8 9,-2.8 3.9,1.2 5.9,7.4 0,3.6 -5.9,7.4 -3.9,1.2 -9,-2.8 -2.6,-2.8" />
+                </template>
+              </g>
+            </template>
+            <!-- Waypoint (дефолтный кружок из config) -->
+            <circle
+              v-else
+              cx="0" cy="0"
+              :r="typeof config.radius === 'function' ? config.radius(nodes[nodeId]) : config.radius"
+              :fill="typeof config.color === 'function' ? config.color(nodes[nodeId]) : config.color"
+              :stroke="typeof config.strokeColor === 'function' ? config.strokeColor(nodes[nodeId]) : (config.strokeColor || '#ffffff')"
+              :stroke-width="typeof config.strokeWidth === 'function' ? config.strokeWidth(nodes[nodeId]) : (config.strokeWidth || 0)"
             />
           </template>
         </v-network-graph>
