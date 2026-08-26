@@ -7,7 +7,7 @@ const CI = !!process.env.CI
  * в CI — тоже preview на порту 5175.
  * Live production можно проверять через BASE_URL=https://ddmsngr.github.io/fleet-manager
  */
-const BASE = process.env.BASE_URL || 'http://localhost:5175/fleet-manager'
+const BASE = process.env.BASE_URL || 'http://127.0.0.1:5175/fleet-manager'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -32,11 +32,11 @@ export default defineConfig({
     },
   ],
   webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run preview -- --port 5175',
-    url: BASE,
+    command: 'npm run preview -- --port 5175 --host 127.0.0.1',
+    url: 'http://127.0.0.1:5175/fleet-manager/',
     reuseExistingServer: !CI,
-    timeout: 60_000,
-    stdout: 'ignore',
+    timeout: 120_000,
+    stdout: 'pipe',
     stderr: 'pipe',
   },
 })
