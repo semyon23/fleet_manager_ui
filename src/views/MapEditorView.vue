@@ -44,6 +44,7 @@ const search = ref('')
 // Visibility toggles
 const showGrid = ref(true)
 const showLabels = ref(true)
+const showBackground = ref(true)  // SLAM PGM подложка
 // showNodes / showEdges убраны — computed-обёртка ломала реактивность
 // v-network-graph. При необходимости показ можно сделать через configs.opacity.
 const gridInterval = ref(1)
@@ -436,12 +437,14 @@ function onEditMenu(key) {
 const viewMenu = computed(() => [
   { label: (showLabels.value ? '✓ ' : '  ') + 'Labels', key: 'toggle-labels' },
   { label: (showGrid.value ? '✓ ' : '  ') + 'Grid', key: 'toggle-grid' },
+  { label: (showBackground.value ? '✓ ' : '  ') + 'SLAM background', key: 'toggle-bg' },
   { type: 'divider' },
   { label: 'Fit to map', key: 'fit' },
 ])
 function onViewMenu(key) {
   if (key === 'toggle-labels') showLabels.value = !showLabels.value
   else if (key === 'toggle-grid') showGrid.value = !showGrid.value
+  else if (key === 'toggle-bg') showBackground.value = !showBackground.value
   else if (key === 'fit') fitToMap()
 }
 
@@ -627,7 +630,7 @@ function switchMap(id) {
 }
 
 const TOOLS = [
-  { key: 'select', label: 'Select (V)', icon: 'cursor' },
+  { key: 'select', label: 'Roam / Select (V) — pan by drag, click node to select', icon: 'cursor' },
   { key: 'node', label: 'Node (N)', icon: 'circle' },
   { key: 'edge', label: 'Edge (E)', icon: 'arrow' },
   { key: 'station', label: 'Station (S)', icon: 'square' },
@@ -715,6 +718,18 @@ const TOOLS = [
       </button>
       <button class="tool-btn" @click="fitToMap" title="Fit to map">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></svg>
+      </button>
+      <button
+        class="tool-btn"
+        :class="{ active: showBackground }"
+        @click="showBackground = !showBackground"
+        title="Toggle SLAM background"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h10"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <path d="M21 15l-5-5-9 9"/>
+        </svg>
       </button>
 
       <div class="mx-2 h-6 w-px bg-slate-200" />
@@ -832,7 +847,7 @@ const TOOLS = [
           :layers="{ map: 'base' }"
           class="absolute inset-0"
         >
-          <template #map v-if="backgroundImage">
+          <template #map v-if="backgroundImage && showBackground">
             <image
               :href="backgroundImage.href"
               :x="backgroundImage.x"
