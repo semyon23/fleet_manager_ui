@@ -47,7 +47,13 @@ export function parsePGM(buffer) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || !Number.isFinite(maxVal)) {
     throw new Error('Malformed PGM header')
   }
-  cursor++
+  // nextToken() уже съел один терминирующий whitespace после maxVal.
+  // Скипаем ЕЩЁ подряд идущие пробелы/переводы строк (CRLF файлы дают \r\n).
+  while (cursor < bytes.length) {
+    const c = bytes[cursor]
+    if (c === 0x0a || c === 0x0d || c === 0x20 || c === 0x09) cursor++
+    else break
+  }
 
   const total = width * height
   const gray = new Uint8Array(total)
