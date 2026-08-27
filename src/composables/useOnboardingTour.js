@@ -151,9 +151,9 @@ export function useOnboardingTour(router) {
         side: 'left',
       },
     },
-    // === File menu → Preview JSON ===
+    // === Preview JSON ===
     {
-      element: 'button:has-text("Preview JSON"), [class*="rounded"][class*="border"]:has-text("Preview JSON")',
+      element: '[data-tour="preview-json"]',
       popover: {
         title: 'Preview JSON',
         description: 'Смотришь текущую карту в двух форматах: Nav2 GeoJSON и VDA5050 LIF. Плюс таб Validate — orphan edges, дубли, изолированные точки.',

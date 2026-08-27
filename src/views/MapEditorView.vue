@@ -1251,7 +1251,7 @@ const TOOLS = [
 
       <div class="flex-1" />
 
-      <button class="rounded border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50" @click="showPreview = true">Preview JSON</button>
+      <button data-tour="preview-json" class="rounded border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50" @click="showPreview = true">Preview JSON</button>
       <button class="rounded bg-brand-800 px-3 py-1 text-xs text-white hover:bg-brand-900" @click="saveToBackend">Save</button>
     </div>
 
