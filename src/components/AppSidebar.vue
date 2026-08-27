@@ -24,13 +24,14 @@ const nav = [
         <span class="text-[10px] font-mono text-slate-500">VDA5050 · v0.1</span>
       </div>
     </div>
-    <nav class="flex flex-1 flex-col gap-0.5 p-2">
+    <nav class="flex flex-1 flex-col gap-0.5 p-2" data-tour="sidebar-nav">
       <RouterLink
         v-for="item in nav"
         :key="item.to"
         :to="item.to"
         class="group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-brand-50 hover:text-brand-800"
         active-class="!bg-brand-800 !text-white"
+        :data-tour="'nav-' + item.to.slice(1)"
       >
         <span class="w-4 text-center font-mono text-base">{{ item.icon }}</span>
         <span>{{ item.label }}</span>

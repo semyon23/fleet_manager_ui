@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, reactive, nextTick, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMapsStore } from '../stores/maps'
 import { pixelToWorld, worldToPixel } from '../lib/nav2meta'
@@ -787,11 +787,14 @@ function onViewMenu(key) {
 
 const helpMenu = [
   { label: 'Keyboard shortcuts (?)', key: 'shortcuts' },
+  { label: 'Take a tour', key: 'tour' },
   { label: 'Docs', key: 'docs' },
   { label: 'About', key: 'about' },
 ]
+const tour = inject('tour', null)
 function onHelpMenu(k) {
   if (k === 'shortcuts') showHelp.value = true
+  else if (k === 'tour') tour?.startTour()
   else if (k === 'docs') msg.info('See docs/ folder in repo')
   else if (k === 'about') msg.info('Fleet Manager · Map Editor · VDA5050 LIF + Nav2 GeoJSON')
 }

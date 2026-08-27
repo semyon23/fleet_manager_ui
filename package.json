@@ -18,6 +18,7 @@
   "dependencies": {
     "@vueuse/core": "^11.2.0",
     "chart.js": "^4.4.7",
+    "driver.js": "^1.8.0",
     "js-yaml": "^5.3.0",
     "konva": "^9.3.16",
     "mqtt": "^5.10.3",

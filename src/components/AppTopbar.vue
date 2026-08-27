@@ -1,9 +1,11 @@
 <script setup>
 import { useRoute } from 'vue-router'
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 
 const route = useRoute()
 const title = computed(() => route.meta?.title || 'Fleet Manager')
+const tour = inject('tour', null)
+function startTour() { tour?.startTour() }
 </script>
 
 <template>
@@ -12,6 +14,14 @@ const title = computed(() => route.meta?.title || 'Fleet Manager')
       <h1 class="text-lg font-semibold text-slate-900">{{ title }}</h1>
     </div>
     <div class="flex items-center gap-4">
+      <button
+        @click="startTour"
+        class="flex items-center gap-1.5 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:border-brand-800 hover:text-brand-800"
+        title="Онбординг — тур по функциям"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 3.5M12 17h.01"/></svg>
+        Take a tour
+      </button>
       <div class="flex items-center gap-2 font-mono text-xs text-slate-500">
         <span class="inline-block h-2 w-2 rounded-full bg-slate-400 animate-pulse"></span>
         <span>backend offline · mocks</span>

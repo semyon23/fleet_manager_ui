@@ -1,7 +1,19 @@
 <script setup>
 import { NConfigProvider, NMessageProvider } from 'naive-ui'
+import { useRouter } from 'vue-router'
+import { onMounted, provide } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import AppTopbar from './components/AppTopbar.vue'
+import { useOnboardingTour } from './composables/useOnboardingTour'
+
+const router = useRouter()
+const tour = useOnboardingTour(router)
+// Прокидываем в глубину чтобы Topbar/Editor могли позвать startTour()
+provide('tour', tour)
+
+onMounted(() => {
+  tour.startIfFirstVisit()
+})
 </script>
 
 <template>
