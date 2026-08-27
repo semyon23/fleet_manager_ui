@@ -9,6 +9,7 @@ import { exportLifMulti } from '../lib/exportLifMulti'
 import { parseLif } from '../lib/importLif'
 import { validateMap } from '../lib/validateMap'
 import { graphConfigs } from '../lib/graphConfig'
+import * as api from '../api'
 import { STATION_KINDS, stationColorFor, stationIconFor } from '../lib/theme'
 import { useSequentialIds } from '../composables/useSequentialIds'
 import { useAxisTicks } from '../composables/useAxisTicks'
@@ -681,8 +682,26 @@ function doExportLifMulti() {
   downloadJson(`fleet-manager-multi.lif.json`, l)
   msg.success(`Exported multi-layout LIF: ${l.layouts.length} layouts`)
 }
-function saveToBackend() {
-  msg.success(`Saved (mock). Backend: POST /api/maps/${map.value.id}`)
+// Идёт через API-слой: в mock-режиме локально сохраняет, в real шлёт PATCH /maps/:id
+async function saveToBackend() {
+  try {
+    const patch = {
+      name: map.value.name,
+      meta: map.value.meta,
+      waypoints: map.value.waypoints,
+      edges: map.value.edges,
+      stations: map.value.stations,
+    }
+    await api.maps.updateMap(map.value.id, patch)
+    const mode = api.getMockMode() ? '(mock)' : ''
+    msg.success(`Saved ${mode}`.trim())
+  } catch (e) {
+    if (e instanceof api.ApiError) {
+      msg.error(`Save failed: ${e.code} — ${e.message}`)
+    } else {
+      msg.error('Save failed: ' + (e.message || String(e)))
+    }
+  }
 }
 
 // === Import LIF: подмена nodes/edges/stations на данные из JSON-файла ===
