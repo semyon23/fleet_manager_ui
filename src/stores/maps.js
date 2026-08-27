@@ -94,6 +94,18 @@ export const useMapsStore = defineStore('maps', () => {
     return maps.value[idx]
   }
 
+  // Отдельный апдейт метаданных карты (resolution, origin) — глубокий merge
+  // чтобы не терять неизменённые поля вроде occupiedThresh/mode.
+  function updateMeta(id, metaPatch) {
+    const idx = maps.value.findIndex((m) => m.id === id)
+    if (idx < 0) return null
+    const cur = maps.value[idx]
+    const newMeta = { ...cur.meta, ...metaPatch }
+    maps.value[idx] = { ...cur, meta: newMeta, updatedAt: new Date().toISOString() }
+    persist(maps.value)
+    return maps.value[idx]
+  }
+
   function remove(id) {
     maps.value = maps.value.filter((m) => m.id !== id)
     persist(maps.value)
@@ -103,5 +115,5 @@ export const useMapsStore = defineStore('maps', () => {
     return update(id, { assignedRobots: robotIds })
   }
 
-  return { maps, count, get, create, update, remove, assignRobots }
+  return { maps, count, get, create, update, updateMeta, remove, assignRobots }
 })

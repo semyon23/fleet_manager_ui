@@ -73,6 +73,10 @@ function snapUV(u, v) {
 // Edge draft (для tool='edge' — держим первую выбранную ноду)
 let pendingEdgeStart = null
 
+// Calibration draft (для tool='calibrate' — держим первую точку)
+const pendingCalibrationStart = ref(null)  // { u, v }
+// Ссылка на overlay-линию во время калибровки — рисуется в SVG слое поверх графа
+
 // Копипаст: копируем выделенное в JS-переменную (не в system clipboard,
 // чтобы работало offline и не требовало permissions). Paste ставит клон
 // со сдвигом offset пиксельным и обновляет ID через nextNodeId/nextStationId.
@@ -91,6 +95,8 @@ const SHORTCUTS = [
   { keys: 'E', desc: 'Edge — соединить 2 существующие ноды' },
   { keys: 'S', desc: 'Station' },
   { keys: 'M', desc: 'Box select — обвести ноды прямоугольником' },
+  { keys: 'O', desc: 'Set Origin — клик задаёт world (0, 0)' },
+  { keys: 'K', desc: 'Calibrate — 2 клика + метры → пересчитать m/px' },
   { keys: 'Del', desc: 'Удалить выделенное' },
   { keys: 'Esc', desc: 'Снять выделение / отменить draft edge' },
   { keys: 'Ctrl+Z', desc: 'Undo' },
@@ -208,6 +214,15 @@ function onViewClick(evt) {
   if (!map.value) return
   const pos = eventToLayout(evt)
   if (!pos) return
+  // Origin и Calibrate работают с сырыми pixel-координатами (не snap)
+  if (tool.value === 'set-origin') {
+    handleSetOrigin(pos.x, pos.y)
+    return
+  }
+  if (tool.value === 'calibrate') {
+    handleCalibrateClick(pos.x, pos.y)
+    return
+  }
   const snapped = snapUV(pos.x, pos.y)
   const u = snapped.u, v = snapped.v
 
@@ -219,6 +234,67 @@ function onViewClick(evt) {
     selectedNodes.value = []
     selectedEdges.value = []
   }
+}
+
+// === Set Origin: тычок мыши = сюда мы кладём world (0, 0) ===
+// Формула: pixelToWorld(meta, u, v, H) = (0, 0)
+//   0 = origin.x + u * resolution → origin.x = -u * resolution
+//   0 = origin.y + (H - v) * resolution → origin.y = -(H - v) * resolution
+function handleSetOrigin(u, v) {
+  if (!map.value) return
+  const res = map.value.meta.resolution
+  const H = map.value.height
+  const newOrigin = [
+    -u * res,
+    -(H - v) * res,
+    map.value.meta.origin[2] || 0,
+  ]
+  store.updateMeta(map.value.id, { origin: newOrigin })
+  msg.success(`Origin установлен: (${newOrigin[0].toFixed(3)}, ${newOrigin[1].toFixed(3)}) m`)
+  tool.value = 'select'
+}
+
+// Reset origin в левый-нижний угол карты — стандарт ROS/Nav2 для новой карты
+function resetOriginBottomLeft() {
+  if (!map.value) return
+  store.updateMeta(map.value.id, { origin: [0, 0, map.value.meta.origin[2] || 0] })
+  msg.success('Origin сброшен в левый-нижний угол карты')
+}
+
+// === Calibrate: два клика → диалог "введи реальное расстояние в метрах" ===
+// resolution пересчитывается: newRes = realMeters / pixelDistance
+function handleCalibrateClick(u, v) {
+  if (!pendingCalibrationStart.value) {
+    pendingCalibrationStart.value = { u, v }
+    msg.info('Кликни вторую точку — известное расстояние')
+    return
+  }
+  const a = pendingCalibrationStart.value
+  const dx = u - a.u
+  const dy = v - a.v
+  const pixDist = Math.sqrt(dx * dx + dy * dy)
+  pendingCalibrationStart.value = null
+  if (pixDist < 3) {
+    msg.error('Точки слишком близко — калибровка отменена')
+    return
+  }
+  const input = prompt(
+    `Расстояние между точками: ${pixDist.toFixed(1)} px\n\n` +
+    `Введи РЕАЛЬНОЕ расстояние в метрах:`
+  )
+  if (input === null) return
+  const meters = parseFloat(input.replace(',', '.'))
+  if (!isFinite(meters) || meters <= 0) {
+    msg.error('Неверное число')
+    return
+  }
+  const newRes = meters / pixDist
+  store.updateMeta(map.value.id, { resolution: newRes })
+  msg.success(
+    `Resolution откалиброван: ${newRes.toFixed(5)} m/px ` +
+    `(было ${map.value.meta.resolution.toFixed(5)})`
+  )
+  tool.value = 'select'
 }
 
 // Точный порядок и deep-clone взяты из эталона vda5050_lif_editor
@@ -699,12 +775,14 @@ const viewMenu = computed(() => [
   { label: (showBackground.value ? '✓ ' : '  ') + 'SLAM background', key: 'toggle-bg' },
   { type: 'divider' },
   { label: 'Fit to map', key: 'fit' },
+  { label: 'Reset origin → lower-left corner', key: 'reset-origin' },
 ])
 function onViewMenu(key) {
   if (key === 'toggle-labels') showLabels.value = !showLabels.value
   else if (key === 'toggle-grid') showGrid.value = !showGrid.value
   else if (key === 'toggle-bg') showBackground.value = !showBackground.value
   else if (key === 'fit') fitToMap()
+  else if (key === 'reset-origin') resetOriginBottomLeft()
 }
 
 const helpMenu = [
@@ -937,6 +1015,7 @@ function onKey(e) {
     e.preventDefault(); deleteSelected()
   } else if (e.key === 'Escape') {
     pendingEdgeStart = null
+    pendingCalibrationStart.value = null
     selectedNodes.value = []
     selectedEdges.value = []
   } else if (e.key === 'v') tool.value = 'select'
@@ -945,6 +1024,8 @@ function onKey(e) {
   else if (e.key === 'l') tool.value = 'batch-lines'
   else if (e.key === 'e') tool.value = 'edge'
   else if (e.key === 's') tool.value = 'station'
+  else if (e.key === 'o') tool.value = 'set-origin'
+  else if (e.key === 'k') tool.value = 'calibrate'
   else if (e.key === 'm') startBoxSelect()
   else if (e.key === '?') showHelp.value = true
 }
@@ -993,6 +1074,8 @@ const TOOLS = [
   { key: 'batch-lines', label: 'Batch Lines (L) — polyline: each click adds node + edge to prev', icon: 'batch-lines' },
   { key: 'edge', label: 'Edge (E)', icon: 'arrow' },
   { key: 'station', label: 'Station (S)', icon: 'square' },
+  { key: 'set-origin', label: 'Set Origin (O) — клик задаёт world (0,0)', icon: 'origin' },
+  { key: 'calibrate', label: 'Calibrate (K) — 2 клика + метры → пересчитать resolution', icon: 'ruler' },
 ]
 </script>
 
@@ -1025,7 +1108,16 @@ const TOOLS = [
         <option v-for="m in allMapsOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
       </select>
       <span class="font-mono text-[10px] text-slate-500">
-        {{ map.width }}×{{ map.height }} · {{ map.meta.resolution }} m/px
+        {{ map.width }}×{{ map.height }} px
+      </span>
+      <span
+        class="cursor-pointer font-mono text-[10px] text-slate-500 hover:text-brand-800"
+        :title="'Кликни чтобы сбросить origin в левый-нижний угол'"
+        @click="resetOriginBottomLeft"
+      >
+        · {{ Number(map.meta.resolution).toFixed(5) }} m/px
+        · origin ({{ Number(map.meta.origin[0] || 0).toFixed(2) }},
+                   {{ Number(map.meta.origin[1] || 0).toFixed(2) }})
       </span>
 
       <div class="flex-1" />
@@ -1047,7 +1139,7 @@ const TOOLS = [
           tool === t.key ? 'active' : '',
         ]"
         :title="t.label"
-        @click="tool = t.key; pendingEdgeStart = null"
+        @click="tool = t.key; pendingEdgeStart = null; pendingCalibrationStart.value = null"
       >
         <svg v-if="t.icon === 'cursor'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.5 18 2.4-8.1L21 10.5 3 3z"/></svg>
         <svg v-if="t.icon === 'circle'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
@@ -1055,6 +1147,8 @@ const TOOLS = [
         <svg v-if="t.icon === 'batch-lines'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18L9 8l4 6 7-10"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/><circle cx="9" cy="8" r="1.6" fill="currentColor"/><circle cx="13" cy="14" r="1.6" fill="currentColor"/><circle cx="20" cy="4" r="1.6" fill="currentColor"/></svg>
         <svg v-if="t.icon === 'arrow'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         <svg v-if="t.icon === 'square'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+        <svg v-if="t.icon === 'origin'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+        <svg v-if="t.icon === 'ruler'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20L20 4"/><path d="M8 16L6 18M11 13L9 15M14 10L12 12M17 7L15 9"/></svg>
       </button>
 
       <div class="mx-2 h-6 w-px bg-slate-200" />
