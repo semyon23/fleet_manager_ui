@@ -57,5 +57,15 @@ export const useRobotsStore = defineStore('robots', () => {
     })
   }
 
-  return { robots, counts, totalBattery, addRobot }
+  // Замерджить свежий список с бэка (GET /fms/robots). Известным роботам
+  // сохраняем sprites — их бэк не отдаёт, это фронтовое поле.
+  function mergeRobots(freshList) {
+    const spritesById = new Map(robots.value.map((r) => [r.id, r.sprites]))
+    robots.value = freshList.map((r) => ({
+      ...r,
+      sprites: spritesById.get(r.id) || AMR_SPRITES,
+    }))
+  }
+
+  return { robots, counts, totalBattery, addRobot, mergeRobots }
 })

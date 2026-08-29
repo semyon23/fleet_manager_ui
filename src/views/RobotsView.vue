@@ -1,13 +1,50 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRobotsStore } from '../stores/robots'
-import { NCard, NDataTable, NTag, NButton, NModal, NInput, NSelect, useMessage } from 'naive-ui'
+import { NCard, NDataTable, NTag, NButton, NModal, NInput, NSelect, NSwitch, useMessage } from 'naive-ui'
 import { h } from 'vue'
 import { previewSpriteFor, tintStyle } from '../lib/robotSprite'
 import * as api from '../api'
 
 const store = useRobotsStore()
 const msg = useMessage()
+
+// === Polling: GET /fms/robots каждую секунду (в real-режиме) ===
+// Семён (2026-08-29): статусы в таблице по polling'у, позицию на карте — по WebSocket.
+const POLL_MS = 1000
+const livePolling = ref(true)
+const lastPollAt = ref(null)
+const lastPollError = ref(null)
+let pollTimer = null
+
+async function pollOnce() {
+  try {
+    const fresh = await api.robots.listRobots()
+    store.mergeRobots(fresh)
+    lastPollAt.value = new Date()
+    lastPollError.value = null
+  } catch (e) {
+    lastPollError.value = e instanceof api.ApiError ? `${e.code} — ${e.message}` : e.message
+  }
+}
+
+function startPolling() {
+  if (pollTimer) return
+  pollOnce()
+  pollTimer = setInterval(pollOnce, POLL_MS)
+}
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+}
+
+onMounted(() => { if (livePolling.value) startPolling() })
+onBeforeUnmount(stopPolling)
+
+function toggleLive(val) {
+  livePolling.value = val
+  if (val) startPolling()
+  else stopPolling()
+}
 
 const statusColor = {
   moving: '#22c55e',
@@ -97,7 +134,16 @@ async function submitRegister() {
 <template>
   <NCard title="Robots" size="small" class="!bg-white">
     <template #header-extra>
-      <NButton type="primary" size="small" @click="openRegister">+ Register robot</NButton>
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 text-xs text-slate-500">
+          <span :class="livePolling ? 'inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse' : 'inline-block h-2 w-2 rounded-full bg-slate-400'"></span>
+          <span>Live (1s)</span>
+          <NSwitch :value="livePolling" size="small" @update:value="toggleLive" />
+        </div>
+        <span v-if="lastPollError" class="text-xs text-rose-600 font-mono" :title="lastPollError">poll error</span>
+        <span v-else-if="lastPollAt" class="text-xs text-slate-400 font-mono">{{ lastPollAt.toLocaleTimeString() }}</span>
+        <NButton type="primary" size="small" @click="openRegister">+ Register robot</NButton>
+      </div>
     </template>
     <NDataTable :columns="columns" :data="store.robots" :bordered="false" />
 
