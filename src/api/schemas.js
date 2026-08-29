@@ -112,6 +112,70 @@ export const Robot = z.object({
   uptime: z.string().optional(),
 })
 export const RobotList = z.array(Robot)
+
+// ==== Wire-format от бэка Семёна (GET /fms/robots) ====
+// Отличается от нашего внутреннего Robot — мапится через wireToRobot().
+// Схема из его кода (2026-08-29):
+export const RobotWire = z.object({
+  name: z.string(),
+  spec: z.object({
+    labels: z.array(z.any()).optional().default([]),
+    battery: z.object({ critical_level: z.number() }).partial().optional(),
+    heartbeat_timeout_seconds: z.number().optional(),
+    switch_teleop: z.boolean().optional(),
+  }).partial().optional(),
+  status: z.object({
+    online: z.boolean(),
+    state: z.string(),                    // строку смэпим в наш enum
+    battery_level: z.number(),
+    position_initialized: z.boolean().optional(),
+    pose: z.object({
+      x: z.number(),
+      y: z.number(),
+      theta: z.number(),
+    }),
+    identifier: z.object({
+      agv_class: z.string().optional(),
+      speed_max: z.number().optional(),
+    }).partial().optional(),
+    software_version: z.object({
+      os: z.string().optional(),
+      app: z.string().optional(),
+    }).partial().optional(),
+    hardware_version: z.object({
+      manufacturer: z.string().optional(),
+      serial_number: z.string().optional(),
+    }).partial().optional(),
+    info_messages: z.array(z.any()).optional().default([]),
+    errors: z.array(z.any()).optional().default([]),
+  }),
+})
+export const RobotWireList = z.array(RobotWire)
+
+// Маппер wire → внутренний Robot, который жрёт UI.
+// Логика: если робот offline (status.online=false) — status='offline';
+// иначе берём status.state, приводим к lowercase, если попадает в наш enum — используем,
+// иначе фолбэк 'idle'.
+const KNOWN_STATUSES = new Set(['moving', 'charging', 'idle', 'error', 'offline'])
+export function wireToRobot(w) {
+  const rawState = String(w.status.state || '').toLowerCase()
+  const status = !w.status.online ? 'offline' : (KNOWN_STATUSES.has(rawState) ? rawState : 'idle')
+  const modelParts = [
+    w.status?.hardware_version?.manufacturer,
+    w.status?.identifier?.agv_class,
+  ].filter(Boolean)
+  return {
+    id: w.name,
+    model: modelParts.join(' · ') || '—',
+    status,
+    battery: Math.round(w.status.battery_level ?? 0),
+    x: w.status.pose?.x ?? 0,
+    y: w.status.pose?.y ?? 0,
+    theta: w.status.pose?.theta ?? 0,
+    mission: null,
+    uptime: '—',
+  }
+}
 export const RobotCommand = z.object({
   action: z.enum(['pause', 'resume', 'stop', 'home', 'reboot', 'shutdown']),
 })

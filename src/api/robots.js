@@ -1,5 +1,5 @@
 import { request, getMockMode, withMockDelay } from './client'
-import { Robot, RobotList, RegisterRobotResponse } from './schemas'
+import { RobotWireList, RegisterRobotResponse, wireToRobot } from './schemas'
 import * as mocks from './mocks/robots.mock'
 
 /**
@@ -16,12 +16,15 @@ import * as mocks from './mocks/robots.mock'
 
 export async function listRobots() {
   if (getMockMode()) return withMockDelay(mocks.listRobots())
-  return request('GET', '/fms/robots', { schema: RobotList })
+  // Бэк Семёна отдаёт wire-формат (name/spec/status/...); мапим в внутренний Robot.
+  const wire = await request('GET', '/fms/robots', { schema: RobotWireList })
+  return wire.map(wireToRobot)
 }
 
 export async function getRobot(id) {
   if (getMockMode()) return withMockDelay(mocks.getRobot(id))
-  return request('GET', `/fms/robots/${encodeURIComponent(id)}`, { schema: Robot })
+  const wire = await request('GET', `/fms/robots/${encodeURIComponent(id)}`)
+  return wireToRobot(wire)
 }
 
 // Регистрация нового робота в fleet. Формат Семёна: POST /fms/robots.

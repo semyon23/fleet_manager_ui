@@ -65,3 +65,44 @@ describe('API schemas — happy path', () => {
     expect(bad.success).toBe(false)
   })
 })
+
+describe('RobotWire → Robot mapper', () => {
+  const wire = {
+    name: 'amr-01',
+    spec: { labels: [], battery: { critical_level: 20 } },
+    status: {
+      online: true,
+      state: 'MOVING',
+      battery_level: 78.4,
+      pose: { x: 12.4, y: 8.2, theta: 1.57 },
+      identifier: { agv_class: 'CARRIER', speed_max: 1.5 },
+      hardware_version: { manufacturer: 'SomeCorp', serial_number: 'SN1' },
+      software_version: { os: 'Linux', app: '1.0' },
+      info_messages: [],
+      errors: [],
+    },
+  }
+
+  it('parses wire schema', () => {
+    expect(S.RobotWire.safeParse(wire).success).toBe(true)
+  })
+
+  it('maps MOVING → moving, rounds battery, joins model', () => {
+    const r = S.wireToRobot(wire)
+    expect(r.id).toBe('amr-01')
+    expect(r.status).toBe('moving')
+    expect(r.battery).toBe(78)
+    expect(r.x).toBe(12.4)
+    expect(r.model).toBe('SomeCorp · CARRIER')
+  })
+
+  it('offline overrides state when status.online=false', () => {
+    const r = S.wireToRobot({ ...wire, status: { ...wire.status, online: false } })
+    expect(r.status).toBe('offline')
+  })
+
+  it('unknown state falls back to idle', () => {
+    const r = S.wireToRobot({ ...wire, status: { ...wire.status, state: 'FLYING' } })
+    expect(r.status).toBe('idle')
+  })
+})
