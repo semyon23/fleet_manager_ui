@@ -43,5 +43,19 @@ export const useRobotsStore = defineStore('robots', () => {
     Math.round(robots.value.reduce((s, r) => s + r.battery, 0) / robots.value.length)
   )
 
-  return { robots, counts, totalBattery }
+  // Локально добавить только что зарегистрированного робота (после успешного
+  // ответа api.robots.registerRobot). Стартовые значения — offline / 0, дальше
+  // WebSocket от бэка обновит реальную позицию/статус.
+  function addRobot({ name, manufacturer, amr_class }) {
+    robots.value.push({
+      id: name,
+      model: manufacturer ? `${manufacturer} · ${amr_class}` : amr_class,
+      sprites: AMR_SPRITES,
+      status: 'offline',
+      battery: 0, x: 0, y: 0, theta: 0,
+      mission: null, uptime: '0h',
+    })
+  }
+
+  return { robots, counts, totalBattery, addRobot }
 })

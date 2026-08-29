@@ -252,6 +252,27 @@ Response 200: Robot
 Errors: 404 NOT_FOUND
 ```
 
+#### `POST /fms/robots`
+
+Регистрация нового робота в fleet. Формат от Семёна (2026-08-29). Заметь префикс `/fms/` —
+уточняем нужен ли он на всех эндпоинтах или только тут.
+
+```json
+Request: {
+  "name": "amr-10",              // уникальный id, используется дальше во всех API
+  "manufacturer": "Corp",        // производитель
+  "amr_class": "CARRIER"         // CARRIER | FORKLIFT | TUGGER | TOWING | MOBILE_ROBOT (default: CARRIER)
+}
+Response 201 Created: {
+  "status": "success",
+  "robot_id": "amr-10"
+}
+Errors: 400 INVALID_INPUT, 409 CONFLICT (робот с таким name уже есть)
+```
+
+**Открытый вопрос:** REST-канон — вернуть **сам созданный объект** (полный `Robot`),
+а не `{status, robot_id}`. Обёртка избыточна — 201 уже говорит success. Ждём решения Семёна.
+
 #### `POST /robots/:id/command`
 Отправить команду роботу.
 ```json

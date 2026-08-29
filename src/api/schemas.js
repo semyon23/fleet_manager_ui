@@ -116,6 +116,19 @@ export const RobotCommand = z.object({
   action: z.enum(['pause', 'resume', 'stop', 'home', 'reboot', 'shutdown']),
 })
 
+// POST /fms/robots — регистрация нового робота в fleet.
+// Формат Семёна (2026-08-29): { name, manufacturer, amr_class="CARRIER" (default) }
+export const AmrClass = z.enum(['CARRIER', 'FORKLIFT', 'TUGGER', 'TOWING', 'MOBILE_ROBOT'])
+export const RegisterRobotRequest = z.object({
+  name: z.string().min(1),
+  manufacturer: z.string().min(1),
+  amr_class: AmrClass.default('CARRIER'),
+})
+export const RegisterRobotResponse = z.object({
+  status: z.literal('success'),
+  robot_id: z.string(),
+})
+
 // === Missions ===
 export const Mission = z.object({
   id: z.string(),

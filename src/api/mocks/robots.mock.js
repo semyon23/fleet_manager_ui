@@ -20,6 +20,21 @@ export function getRobot(id) {
   if (!r) { const e = new Error('Robot not found'); e.status = 404; throw e }
   return { ...r }
 }
+// Регистрация нового робота. Возвращаем в формате бэка Семёна.
+export function registerRobot({ name, manufacturer, amr_class = 'CARRIER' }) {
+  if (MOCK_ROBOTS.some((r) => r.id === name)) {
+    const e = new Error(`Robot with name '${name}' already exists`)
+    e.status = 409
+    throw e
+  }
+  MOCK_ROBOTS.push({
+    id: name,
+    model: manufacturer ? `${manufacturer} · ${amr_class}` : amr_class,
+    status: 'offline', battery: 0, x: 0, y: 0, theta: 0, mission: null, uptime: '0h',
+  })
+  return { status: 'success', robot_id: name }
+}
+
 export function sendCommand(id, action) {
   // Мок принимает команду, но реально ничего не делает
   console.log('[mock] robot command:', id, action)
