@@ -1,18 +1,27 @@
 <script setup>
 import { NConfigProvider, NMessageProvider } from 'naive-ui'
 import { useRouter } from 'vue-router'
-import { onMounted, provide } from 'vue'
+import { onMounted, onBeforeUnmount, provide } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import AppTopbar from './components/AppTopbar.vue'
 import { useOnboardingTour } from './composables/useOnboardingTour'
+import { useRobotsStore } from './stores/robots'
 
 const router = useRouter()
 const tour = useOnboardingTour(router)
 // Прокидываем в глубину чтобы Topbar/Editor могли позвать startTour()
 provide('tour', tour)
 
+const robots = useRobotsStore()
+
 onMounted(() => {
   tour.startIfFirstVisit()
+  // Глобальный polling GET /fms/robots каждую секунду — таблица, Dashboard,
+  // LiveMap и т.д. видят одни и те же живые данные.
+  robots.startPolling()
+})
+onBeforeUnmount(() => {
+  robots.stopPolling()
 })
 </script>
 

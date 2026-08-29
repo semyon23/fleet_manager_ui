@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { getMockMode } from '../api/client'
 
 const BASE = import.meta.env.BASE_URL
 
@@ -28,7 +29,9 @@ const MOCK_ROBOTS = [
 ]
 
 export const useRobotsStore = defineStore('robots', () => {
-  const robots = ref(MOCK_ROBOTS)
+  // В mock-режиме показываем 9 демо-роботов сразу. В real-режиме стартуем
+  // с пустого списка — пусть первый poll наполнит реальными с бэка.
+  const robots = ref(getMockMode() ? MOCK_ROBOTS : [])
 
   const counts = computed(() => ({
     moving: robots.value.filter((r) => r.status === 'moving').length,
@@ -39,9 +42,42 @@ export const useRobotsStore = defineStore('robots', () => {
     total: robots.value.length,
   }))
 
-  const totalBattery = computed(() =>
-    Math.round(robots.value.reduce((s, r) => s + r.battery, 0) / robots.value.length)
-  )
+  const totalBattery = computed(() => {
+    if (!robots.value.length) return 0
+    return Math.round(robots.value.reduce((s, r) => s + r.battery, 0) / robots.value.length)
+  })
+
+  // === Глобальный polling: GET /fms/robots каждую секунду ===
+  // Запускается один раз из App.vue.onMounted, доступен во всех views.
+  const POLL_MS = 1000
+  const pollingActive = ref(false)
+  const lastPollAt = ref(null)
+  const lastPollError = ref(null)
+  let pollTimer = null
+
+  async function pollOnce() {
+    // Ленивый импорт — иначе циклическая зависимость stores/api.
+    const api = await import('../api')
+    try {
+      const fresh = await api.robots.listRobots()
+      mergeRobots(fresh)
+      lastPollAt.value = new Date()
+      lastPollError.value = null
+    } catch (e) {
+      lastPollError.value = e.code ? `${e.code} — ${e.message}` : (e.message || 'poll failed')
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer) return
+    pollingActive.value = true
+    pollOnce()
+    pollTimer = setInterval(pollOnce, POLL_MS)
+  }
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+    pollingActive.value = false
+  }
 
   // Локально добавить только что зарегистрированного робота (после успешного
   // ответа api.robots.registerRobot). Стартовые значения — offline / 0, дальше
@@ -67,5 +103,10 @@ export const useRobotsStore = defineStore('robots', () => {
     }))
   }
 
-  return { robots, counts, totalBattery, addRobot, mergeRobots }
+  return {
+    robots, counts, totalBattery,
+    addRobot, mergeRobots,
+    pollingActive, lastPollAt, lastPollError,
+    startPolling, stopPolling,
+  }
 })
