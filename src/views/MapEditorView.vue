@@ -609,7 +609,7 @@ const backgroundImage = computed(() =>
 )
 
 // Метровые линейки — в composables/useAxisTicks (сам стартует и останавливает интервал)
-const { xTicks, yTicks } = useAxisTicks(graph, map)
+const { xTicks, yTicks, originScreen } = useAxisTicks(graph, map)
 
 // === Zoom controls ===
 function zoomIn() {
@@ -1447,6 +1447,31 @@ const TOOLS = [
             <div class="absolute right-0 top-0 h-px w-2 bg-slate-300"></div>
             <div class="absolute left-0.5 -top-1.5">{{ t.label }}</div>
           </div>
+        </div>
+
+        <!-- Маркер мировой (0, 0): красный крест + ярлык "(0, 0)". Помогает
+             понять, куда сдвинулся Origin относительно карты — все точки
+             левее/ниже него получат отрицательные X/Y. -->
+        <div
+          v-if="originScreen.visible"
+          class="pointer-events-none absolute z-10"
+          :style="{ left: originScreen.px + 'px', top: originScreen.py + 'px' }"
+        >
+          <svg viewBox="-10 -10 20 20" width="20" height="20" style="transform: translate(-10px, -10px);">
+            <line x1="-8" y1="0" x2="8" y2="0" stroke="#dc2626" stroke-width="1.5" />
+            <line x1="0" y1="-8" x2="0" y2="8" stroke="#dc2626" stroke-width="1.5" />
+            <circle cx="0" cy="0" r="2" fill="#dc2626" />
+          </svg>
+          <div class="absolute left-3 top-3 whitespace-nowrap rounded bg-red-600 px-1.5 py-0.5 text-[9px] font-mono text-white shadow">
+            (0, 0)
+          </div>
+        </div>
+        <!-- Origin вне viewBox: маленькая стрелка в углу канваса, куда он ушёл -->
+        <div
+          v-else
+          class="pointer-events-none absolute left-10 top-8 z-10 rounded bg-red-600/90 px-2 py-1 text-[10px] font-mono text-white shadow"
+        >
+          Origin (0, 0) за пределами вида
         </div>
 
         <!-- Zoom controls -->

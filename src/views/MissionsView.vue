@@ -2,10 +2,8 @@
 import { ref } from 'vue'
 import { NCard, NDataTable, NTag, NButton, NModal, NInput, NSelect, useMessage } from 'naive-ui'
 import { h } from 'vue'
-import { useRobotsStore } from '../stores/robots'
 import { useMapsStore } from '../stores/maps'
 
-const robots = useRobotsStore()
 const maps = useMapsStore()
 const msg = useMessage()
 
@@ -16,35 +14,30 @@ const missions = ref([
   { id: 'M-102', robot: 'amr-02', from: 'A-01', to: 'B-11', progress: 12, state: 'failed' },
 ])
 
-const stateColor = { running: '#22c55e', completed: '#3b82f6', failed: '#ef4444', queued: '#94a3b8' }
+const stateColor = { running: '#22c55e', completed: '#3b82f6', failed: '#ef4444', queued: '#94a3b8', pending: '#94a3b8' }
 
 const showModal = ref(false)
-const form = ref({ robot: null, mapId: null, from: '', to: '', priority: 'normal' })
+const form = ref({ mapId: null, from: '', to: '', priority: 'normal' })
 
 function openCreate() {
-  form.value = { robot: null, mapId: maps.maps[0]?.id || null, from: '', to: '', priority: 'normal' }
+  form.value = { mapId: maps.maps[0]?.id || null, from: '', to: '', priority: 'normal' }
   showModal.value = true
 }
 
 function submit() {
-  if (!form.value.robot) return msg.error('Select a robot')
   if (!form.value.from || !form.value.to) return msg.error('Set from and to waypoints')
   const nextId = 'M-' + String(Math.floor(Math.random() * 900) + 110)
   missions.value.unshift({
     id: nextId,
-    robot: form.value.robot,
+    robot: '(pending)',
     from: form.value.from,
     to: form.value.to,
     progress: 0,
-    state: 'queued',
+    state: 'pending',
   })
-  msg.success(`Mission ${nextId} queued (mock — backend will dispatch via VDA5050 Order)`)
+  msg.success(`Mission ${nextId} queued — backend will assign a robot`)
   showModal.value = false
 }
-
-const robotOptions = robots.robots
-  .filter((r) => r.status !== 'offline' && r.status !== 'error')
-  .map((r) => ({ label: `${r.id} · ${r.status} · ${r.battery}%`, value: r.id }))
 
 const mapOptions = maps.maps.map((m) => ({ label: m.name, value: m.id }))
 
@@ -102,17 +95,6 @@ const columns = [
     >
       <div class="flex flex-col gap-4">
         <label class="text-sm text-slate-600">
-          Robot
-          <NSelect
-            v-model:value="form.robot"
-            :options="robotOptions"
-            placeholder="Select a robot"
-            size="medium"
-            class="mt-1"
-          />
-        </label>
-
-        <label class="text-sm text-slate-600">
           Map
           <NSelect
             v-model:value="form.mapId"
@@ -140,7 +122,7 @@ const columns = [
         </label>
 
         <div class="rounded bg-slate-50 p-3 text-xs text-slate-600">
-          On submit — mock only. Real dispatch will POST /api/missions and reach the robot via VDA5050 Order.
+          Backend dispatcher will pick a free robot automatically and reply with the assigned robot in the response.
         </div>
       </div>
 

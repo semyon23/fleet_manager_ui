@@ -286,14 +286,18 @@ Response 200: [ Mission, Mission, ... ]
 ```
 
 #### `POST /missions`
+
+**Робота НЕ передаём — диспетчер бэка сам выбирает свободного.** Ответ возвращает миссию
+уже с назначенным `robotId` (или `null`, если сразу не смогли назначить и она уходит в очередь).
+
 ```json
 Request: {
   "name": "Pickup zone A → Charge",
   "mapId": "map-xxx",
   "nodeIds": ["n001", "n002", "n003"],
-  "robotId": "amr-01"   // опционально: если не указан, бэк выберет свободного
+  "priority": "normal"        // low | normal | high | critical (optional, default: normal)
 }
-Response 200: Mission (status='pending')
+Response 200: Mission (status='pending', robotId=назначенный робот или null)
 ```
 
 #### `POST /missions/:id/cancel`

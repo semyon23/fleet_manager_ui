@@ -128,11 +128,12 @@ export const Mission = z.object({
   updatedAt: IsoDateTime,
 })
 export const MissionList = z.array(Mission)
+// Робота НЕ передаём — бэк-диспетчер сам выберет свободного и вернёт его в Mission.robotId
 export const CreateMissionRequest = z.object({
   name: z.string().min(1),
   mapId: z.string(),
   nodeIds: z.array(z.string()).min(2),
-  robotId: z.string().optional(),
+  priority: z.enum(['low', 'normal', 'high', 'critical']).optional().default('normal'),
 })
 
 // === Alerts ===

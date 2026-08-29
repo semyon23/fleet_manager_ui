@@ -19,6 +19,8 @@ export function useAxisTicks(graphRef, mapRef, options = {}) {
 
   const xTicks = ref([])
   const yTicks = ref([])
+  // Экранная позиция мировой точки (0,0). visible=false если origin за viewBox.
+  const originScreen = ref({ px: 0, py: 0, visible: false })
   let timer = null
 
   function pickTickStep(metersPerPx) {
@@ -72,6 +74,15 @@ export function useAxisTicks(graphRef, mapRef, options = {}) {
       if (yArr.length > 60) break
     }
     yTicks.value = yArr
+
+    // Маркер world-origin (0, 0) в screen-координатах
+    const originLayout = worldToPixel(meta, 0, 0, H)
+    const originPx = ((originLayout.u - vb.left) / (vb.right - vb.left)) * w
+    const originPy = ((originLayout.v - vb.top) / (vb.bottom - vb.top)) * h
+    const visible =
+      originLayout.u >= vb.left && originLayout.u <= vb.right &&
+      originLayout.v >= vb.top && originLayout.v <= vb.bottom
+    originScreen.value = { px: Math.round(originPx), py: Math.round(originPy), visible }
   }
   function start() {
     if (timer) return
@@ -85,5 +96,5 @@ export function useAxisTicks(graphRef, mapRef, options = {}) {
   onMounted(start)
   onBeforeUnmount(stop)
 
-  return { xTicks, yTicks, compute, start, stop }
+  return { xTicks, yTicks, originScreen, compute, start, stop }
 }
