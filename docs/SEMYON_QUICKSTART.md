@@ -72,7 +72,7 @@ VITE_USE_MOCKS=false
 Сохрани, закрой.
 
 Что это делает:
-- `VITE_API_BASE_URL` — куда фронт будет посылать HTTP-запросы (`GET /api/maps`, `POST /api/missions` и т.д.)
+- `VITE_API_BASE_URL` — куда фронт будет посылать HTTP-запросы. С учётом префикса `/fms/*` итоговые URL получатся `GET /api/fms/robots`, `POST /api/fms/missions`, `POST /api/fms/robots` и т.д.
 - `VITE_USE_MOCKS=false` — выключает моки. Без этой строчки фронт по дефолту работает с фейковыми данными из localStorage
 
 ---

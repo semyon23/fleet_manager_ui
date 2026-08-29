@@ -72,12 +72,11 @@ function openRegister() {
 
 async function submitRegister() {
   if (!form.value.name.trim()) return msg.error('Name is required')
-  if (!form.value.manufacturer.trim()) return msg.error('Manufacturer is required')
   submitting.value = true
   try {
     const resp = await api.robots.registerRobot({
       name: form.value.name.trim(),
-      manufacturer: form.value.manufacturer.trim(),
+      manufacturer: form.value.manufacturer.trim(),  // may be empty per Semyon
       amr_class: form.value.amr_class,
     })
     store.addRobot({ ...form.value })
@@ -117,7 +116,7 @@ async function submitRegister() {
         </label>
 
         <label class="text-sm text-slate-600">
-          Manufacturer
+          Manufacturer <span class="text-slate-400 text-xs">(optional)</span>
           <NInput v-model:value="form.manufacturer" placeholder="Transporter Corp" class="mt-1" />
         </label>
 

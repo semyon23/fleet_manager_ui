@@ -12,17 +12,17 @@ import * as mocks from './mocks/missions.mock'
 
 export async function listMissions() {
   if (getMockMode()) return withMockDelay(mocks.listMissions())
-  return request('GET', '/missions', { schema: MissionList })
+  return request('GET', '/fms/missions', { schema: MissionList })
 }
 export async function getMission(id) {
   if (getMockMode()) return withMockDelay(mocks.getMission(id))
-  return request('GET', `/missions/${encodeURIComponent(id)}`, { schema: Mission })
+  return request('GET', `/fms/missions/${encodeURIComponent(id)}`, { schema: Mission })
 }
 export async function createMission(payload) {
   if (getMockMode()) return withMockDelay(mocks.createMission(payload))
-  return request('POST', '/missions', { body: payload, schema: Mission })
+  return request('POST', '/fms/missions', { body: payload, schema: Mission })
 }
 export async function cancelMission(id) {
   if (getMockMode()) return withMockDelay(mocks.cancelMission(id))
-  return request('POST', `/missions/${encodeURIComponent(id)}/cancel`)
+  return request('POST', `/fms/missions/${encodeURIComponent(id)}/cancel`)
 }

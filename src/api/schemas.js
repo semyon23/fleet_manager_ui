@@ -121,7 +121,7 @@ export const RobotCommand = z.object({
 export const AmrClass = z.enum(['CARRIER', 'FORKLIFT', 'TUGGER', 'TOWING', 'MOBILE_ROBOT'])
 export const RegisterRobotRequest = z.object({
   name: z.string().min(1),
-  manufacturer: z.string().min(1),
+  manufacturer: z.string().default(''),  // Семён: можно пустую строку
   amr_class: AmrClass.default('CARRIER'),
 })
 export const RegisterRobotResponse = z.object({

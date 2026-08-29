@@ -8,6 +8,7 @@
 ## Общее
 
 - **Base URL** — берётся из env `VITE_API_BASE_URL` (по умолчанию `/api`)
+- **Префикс роутов** — все пути идут под `/fms/*` (подтверждено Семёном 2026-08-29). Итоговый URL получается `{VITE_API_BASE_URL}/fms/robots`, `{VITE_API_BASE_URL}/fms/missions` и т.д.
 - **Формат** — JSON, `Content-Type: application/json`
 - **Encoding** — UTF-8
 - **Даты/время** — ISO 8601 с timezone (`2026-08-27T10:15:00Z` или `+03:00`)
