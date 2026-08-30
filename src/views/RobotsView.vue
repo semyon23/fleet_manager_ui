@@ -20,11 +20,9 @@ async function deleteRobot(id) {
   try {
     await api.robots.deleteRobot(id)
     store.removeRobot(id)
-    msg.success(`Robot ${id} deleted`)
+    msg.success(`Робот "${id}" удалён`)
   } catch (e) {
-    if (e instanceof api.ApiError) msg.error(`${e.code} — ${e.message}`)
-    else if (e.status === 404) msg.error(`Robot ${id} not found on backend`)
-    else msg.error(e.message || 'Delete failed')
+    msg.error(deleteErrorText(e, id))
   }
 }
 
@@ -99,24 +97,41 @@ function openRegister() {
   showRegister.value = true
 }
 
+// Читаемые сообщения по статусам от бэка Семёна вместо технических кодов.
+function registerErrorText(e, name) {
+  if (e?.status === 409) return `Робот с именем "${name}" уже существует в системе`
+  if (e?.status === 400) return 'Неверные данные — проверь имя робота и попробуй ещё раз'
+  if (e?.status === 0 || e?.code === 'NETWORK') return 'Нет связи с бэкендом — проверь что сервер запущен'
+  if (e?.code === 'TIMEOUT') return 'Бэкенд слишком долго не отвечает'
+  if (e?.status >= 500) return 'Ошибка на стороне бэкенда, попробуй позже'
+  return e?.message || 'Не удалось добавить робота'
+}
+function deleteErrorText(e, name) {
+  if (e?.status === 404) return `Робот "${name}" уже удалён или его нет в системе`
+  if (e?.status === 400) return 'Не удалось удалить — некорректный запрос'
+  if (e?.status === 0 || e?.code === 'NETWORK') return 'Нет связи с бэкендом'
+  if (e?.code === 'TIMEOUT') return 'Бэкенд слишком долго не отвечает'
+  if (e?.status >= 500) return 'Ошибка на стороне бэкенда'
+  return e?.message || `Не удалось удалить робота "${name}"`
+}
+
 async function submitRegister() {
-  if (!form.value.name.trim()) return msg.error('Name is required')
+  if (!form.value.name.trim()) return msg.error('Укажи имя робота')
   submitting.value = true
+  const name = form.value.name.trim()
   try {
     const resp = await api.robots.registerRobot({
-      name: form.value.name.trim(),
+      name,
       manufacturer: form.value.manufacturer.trim(),  // may be empty per Semyon
       amr_class: form.value.amr_class,
     })
-    store.addRobot({ ...form.value })
+    store.addRobot({ ...form.value, name })
     msg.success(api.getMockMode()
-      ? `Robot ${resp.robot_id} registered (mock)`
-      : `Robot ${resp.robot_id} registered`)
+      ? `Робот "${resp.robot_id}" добавлен (mock)`
+      : `Робот "${resp.robot_id}" добавлен`)
     showRegister.value = false
   } catch (e) {
-    if (e instanceof api.ApiError) msg.error(`${e.code} — ${e.message}`)
-    else if (e.status === 409) msg.error('Robot with this name already exists')
-    else msg.error(e.message || 'Register failed')
+    msg.error(registerErrorText(e, name))
   } finally {
     submitting.value = false
   }
