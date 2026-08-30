@@ -99,7 +99,11 @@ export const MapEntity = z.object({
 export const MapList = z.array(MapEntity)
 
 // === Robots ===
-export const RobotStatus = z.enum(['moving', 'charging', 'idle', 'error', 'offline'])
+// Внутренние status'ы фронта. Мапятся из RobotState бэка Семёна:
+//   IDLE→idle, ERROR→error, ON_TASK→moving (визуально едет),
+//   CHARGING→charging, MAP_DEPLOYMENT→deploying, TELEOP→teleop.
+// Плюс frontend-only 'offline' когда status.online=false.
+export const RobotStatus = z.enum(['moving', 'charging', 'idle', 'error', 'offline', 'teleop', 'deploying'])
 export const Robot = z.object({
   id: z.string(),
   model: z.string(),
@@ -153,13 +157,20 @@ export const RobotWire = z.object({
 export const RobotWireList = z.array(RobotWire)
 
 // Маппер wire → внутренний Robot, который жрёт UI.
-// Логика: если робот offline (status.online=false) — status='offline';
-// иначе берём status.state, приводим к lowercase, если попадает в наш enum — используем,
-// иначе фолбэк 'idle'.
-const KNOWN_STATUSES = new Set(['moving', 'charging', 'idle', 'error', 'offline'])
+// STATE_MAP переводит RobotState C++ enum Семёна (2026-08-30) в наш frontend-enum.
+// Если робот offline (status.online=false) — приоритетно ставим 'offline'.
+const STATE_MAP = {
+  IDLE: 'idle',
+  ERROR: 'error',
+  ON_TASK: 'moving',
+  CHARGING: 'charging',
+  MAP_DEPLOYMENT: 'deploying',
+  TELEOP: 'teleop',
+}
 export function wireToRobot(w) {
-  const rawState = String(w.status.state || '').toLowerCase()
-  const status = !w.status.online ? 'offline' : (KNOWN_STATUSES.has(rawState) ? rawState : 'idle')
+  const rawState = String(w.status.state || '').toUpperCase()
+  const mapped = STATE_MAP[rawState] || 'idle'
+  const status = !w.status.online ? 'offline' : mapped
   const modelParts = [
     w.status?.hardware_version?.manufacturer,
     w.status?.identifier?.agv_class,

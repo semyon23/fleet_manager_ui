@@ -34,6 +34,8 @@ const statusColor = {
   idle: '#64748b',
   error: '#ef4444',
   offline: '#94a3b8',
+  teleop: '#8b5cf6',
+  deploying: '#f97316',
 }
 
 const columns = [

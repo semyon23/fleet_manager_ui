@@ -39,6 +39,8 @@ export const useRobotsStore = defineStore('robots', () => {
     idle: robots.value.filter((r) => r.status === 'idle').length,
     error: robots.value.filter((r) => r.status === 'error').length,
     offline: robots.value.filter((r) => r.status === 'offline').length,
+    teleop: robots.value.filter((r) => r.status === 'teleop').length,
+    deploying: robots.value.filter((r) => r.status === 'deploying').length,
     total: robots.value.length,
   }))
 

@@ -54,6 +54,10 @@ export function tintStyle(status) {
       return 'filter: saturate(0.15)'
     case 'offline':
       return 'filter: grayscale(1) opacity(0.5)'
+    case 'teleop':
+      return 'filter: hue-rotate(220deg) saturate(1.2)'
+    case 'deploying':
+      return 'filter: hue-rotate(30deg) saturate(1.1)'
     default:
       return ''
   }

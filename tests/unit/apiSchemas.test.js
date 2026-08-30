@@ -72,7 +72,7 @@ describe('RobotWire → Robot mapper', () => {
     spec: { labels: [], battery: { critical_level: 20 } },
     status: {
       online: true,
-      state: 'MOVING',
+      state: 'ON_TASK',
       battery_level: 78.4,
       pose: { x: 12.4, y: 8.2, theta: 1.57 },
       identifier: { agv_class: 'CARRIER', speed_max: 1.5 },
@@ -87,7 +87,7 @@ describe('RobotWire → Robot mapper', () => {
     expect(S.RobotWire.safeParse(wire).success).toBe(true)
   })
 
-  it('maps MOVING → moving, rounds battery, joins model', () => {
+  it('maps ON_TASK → moving, rounds battery, joins model', () => {
     const r = S.wireToRobot(wire)
     expect(r.id).toBe('amr-01')
     expect(r.status).toBe('moving')
@@ -99,6 +99,11 @@ describe('RobotWire → Robot mapper', () => {
   it('offline overrides state when status.online=false', () => {
     const r = S.wireToRobot({ ...wire, status: { ...wire.status, online: false } })
     expect(r.status).toBe('offline')
+  })
+
+  it('maps MAP_DEPLOYMENT and TELEOP correctly', () => {
+    expect(S.wireToRobot({ ...wire, status: { ...wire.status, state: 'MAP_DEPLOYMENT' } }).status).toBe('deploying')
+    expect(S.wireToRobot({ ...wire, status: { ...wire.status, state: 'TELEOP' } }).status).toBe('teleop')
   })
 
   it('unknown state falls back to idle', () => {
