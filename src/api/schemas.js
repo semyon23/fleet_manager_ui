@@ -150,8 +150,10 @@ export const RobotWire = z.object({
       manufacturer: z.string().optional(),
       serial_number: z.string().optional(),
     }).partial().optional(),
-    info_messages: z.array(z.any()).optional().default([]),
-    errors: z.array(z.any()).optional().default([]),
+    // У Семёна бэк отдаёт эти два поля то как {} (пустой объект), то как []
+    // — z.any() лояльно, чтобы Zod не валил валидацию из-за формата обёртки.
+    info_messages: z.any().optional(),
+    errors: z.any().optional(),
   }),
 })
 export const RobotWireList = z.array(RobotWire)
