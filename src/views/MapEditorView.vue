@@ -90,21 +90,21 @@ const previewTab = ref('geojson')
 const showHelp = ref(false)  // ? cheatsheet
 const SHORTCUTS = [
   { keys: 'V', desc: 'Roam / Select — pan by drag, click node to select' },
-  { keys: 'N', desc: 'Node — одиночная точка' },
-  { keys: 'B', desc: 'Batch Points — цепочка отдельных точек' },
-  { keys: 'L', desc: 'Batch Lines — polyline (точка + edge к предыдущей)' },
-  { keys: 'E', desc: 'Edge — соединить 2 существующие ноды' },
+  { keys: 'N', desc: 'Node — single point' },
+  { keys: 'B', desc: 'Batch Points — chain of standalone points' },
+  { keys: 'L', desc: 'Batch Lines — polyline (point + edge to previous)' },
+  { keys: 'E', desc: 'Edge — connect two existing nodes' },
   { keys: 'S', desc: 'Station' },
-  { keys: 'M', desc: 'Box select — обвести ноды прямоугольником' },
-  { keys: 'O', desc: 'Set Origin — клик задаёт world (0, 0)' },
-  { keys: 'K', desc: 'Calibrate — 2 клика + метры → пересчитать m/px' },
-  { keys: 'Del', desc: 'Удалить выделенное' },
-  { keys: 'Esc', desc: 'Снять выделение / отменить draft edge' },
+  { keys: 'M', desc: 'Box select — rectangle-select nodes' },
+  { keys: 'O', desc: 'Set Origin — click sets world (0, 0)' },
+  { keys: 'K', desc: 'Calibrate — 2 clicks + meters → recompute m/px' },
+  { keys: 'Del', desc: 'Delete selection' },
+  { keys: 'Esc', desc: 'Clear selection / cancel draft edge' },
   { keys: 'Ctrl+Z', desc: 'Undo' },
-  { keys: 'Ctrl+Y или Ctrl+Shift+Z', desc: 'Redo' },
-  { keys: 'Ctrl+C', desc: 'Копировать выделенные ноды' },
-  { keys: 'Ctrl+V', desc: 'Вставить с оффсетом' },
-  { keys: '?', desc: 'Эта справка' },
+  { keys: 'Ctrl+Y or Ctrl+Shift+Z', desc: 'Redo' },
+  { keys: 'Ctrl+C', desc: 'Copy selected nodes' },
+  { keys: 'Ctrl+V', desc: 'Paste with offset' },
+  { keys: '?', desc: 'This help' },
 ]
 const previewGeoJson = computed(() => {
   if (!map.value) return ''
@@ -251,7 +251,7 @@ function handleSetOrigin(u, v) {
     map.value.meta.origin[2] || 0,
   ]
   store.updateMeta(map.value.id, { origin: newOrigin })
-  msg.success(`Origin установлен: (${newOrigin[0].toFixed(3)}, ${newOrigin[1].toFixed(3)}) m`)
+  msg.success(`Origin set: (${newOrigin[0].toFixed(3)}, ${newOrigin[1].toFixed(3)}) m`)
   tool.value = 'select'
 }
 
@@ -259,7 +259,7 @@ function handleSetOrigin(u, v) {
 function resetOriginBottomLeft() {
   if (!map.value) return
   store.updateMeta(map.value.id, { origin: [0, 0, map.value.meta.origin[2] || 0] })
-  msg.success('Origin сброшен в левый-нижний угол карты')
+  msg.success('Origin reset to lower-left corner of the map')
 }
 
 // === Calibrate: два клика → диалог "введи реальное расстояние в метрах" ===
@@ -267,7 +267,7 @@ function resetOriginBottomLeft() {
 function handleCalibrateClick(u, v) {
   if (!pendingCalibrationStart.value) {
     pendingCalibrationStart.value = { u, v }
-    msg.info('Кликни вторую точку — известное расстояние')
+    msg.info('Click the second point — a known distance')
     return
   }
   const a = pendingCalibrationStart.value
@@ -276,24 +276,24 @@ function handleCalibrateClick(u, v) {
   const pixDist = Math.sqrt(dx * dx + dy * dy)
   pendingCalibrationStart.value = null
   if (pixDist < 3) {
-    msg.error('Точки слишком близко — калибровка отменена')
+    msg.error('Points are too close — calibration cancelled')
     return
   }
   const input = prompt(
-    `Расстояние между точками: ${pixDist.toFixed(1)} px\n\n` +
-    `Введи РЕАЛЬНОЕ расстояние в метрах:`
+    `Distance between points: ${pixDist.toFixed(1)} px\n\n` +
+    `Enter the REAL distance in meters:`
   )
   if (input === null) return
   const meters = parseFloat(input.replace(',', '.'))
   if (!isFinite(meters) || meters <= 0) {
-    msg.error('Неверное число')
+    msg.error('Invalid number')
     return
   }
   const newRes = meters / pixDist
   store.updateMeta(map.value.id, { resolution: newRes })
   msg.success(
-    `Resolution откалиброван: ${newRes.toFixed(5)} m/px ` +
-    `(было ${map.value.meta.resolution.toFixed(5)})`
+    `Resolution calibrated: ${newRes.toFixed(5)} m/px ` +
+    `(was ${map.value.meta.resolution.toFixed(5)})`
   )
   tool.value = 'select'
 }
@@ -653,14 +653,14 @@ function checkBeforeExport() {
   const v = validateMap(map.value)
   if (v.errors.length) {
     const list = v.errors.slice(0, 8).join('\n• ')
-    const more = v.errors.length > 8 ? `\n… и ещё ${v.errors.length - 8}` : ''
+    const more = v.errors.length > 8 ? `\n… and ${v.errors.length - 8} more` : ''
     const ok = confirm(
-      `Найдено ${v.errors.length} ошибок:\n\n• ${list}${more}\n\nВсё равно экспортировать?`
+      `Found ${v.errors.length} errors:\n\n• ${list}${more}\n\nExport anyway?`
     )
     return ok
   }
   if (v.warnings.length) {
-    msg.warning(`Экспортировано (${v.warnings.length} предупреждений — см. Preview JSON)`)
+    msg.warning(`Exported (${v.warnings.length} warnings — see Preview JSON)`)
   }
   return true
 }
@@ -720,7 +720,7 @@ function doImportLif() {
       if (layoutCount > 1) {
         const names = lif.layouts.map((l, i) => `${i}: ${l.layoutName || l.layoutId || 'layout'}`).join('\n')
         const pick = prompt(
-          `Файл содержит ${layoutCount} layouts. Введи номер для импорта (0..${layoutCount - 1}):\n\n${names}`,
+          `File contains ${layoutCount} layouts. Enter the index to import (0..${layoutCount - 1}):\n\n${names}`,
           '0'
         )
         if (pick === null) return
@@ -730,7 +730,7 @@ function doImportLif() {
       const total = parsed.waypoints.length + parsed.stations.length
       const existing = map.value.waypoints.length + (map.value.stations?.length || 0)
       if (existing > 0 && !confirm(
-        `Заменить содержимое карты (layout "${parsed.layoutName || layoutIdx}")?\n\nСейчас: ${existing} нод/станций.\nВ файле: ${total} (+ ${parsed.edges.length} edges).`
+        `Replace this map's content (layout "${parsed.layoutName || layoutIdx}")?\n\nCurrent: ${existing} nodes/stations.\nInside the file: ${total} (+ ${parsed.edges.length} edges).`
       )) return
       store.update(map.value.id, {
         waypoints: parsed.waypoints,
@@ -1471,7 +1471,7 @@ const TOOLS = [
           v-else
           class="pointer-events-none absolute left-10 top-8 z-10 rounded bg-red-600/90 px-2 py-1 text-[10px] font-mono text-white shadow"
         >
-          Origin (0, 0) за пределами вида
+          Origin (0, 0) is outside the current view
         </div>
 
         <!-- Zoom controls -->

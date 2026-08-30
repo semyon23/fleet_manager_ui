@@ -24,7 +24,7 @@ onBeforeUnmount(() => { if (modeTimer) clearInterval(modeTimer) })
       <button
         @click="startTour"
         class="flex items-center gap-1.5 rounded border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:border-brand-800 hover:text-brand-800"
-        title="Онбординг — тур по функциям"
+        title="Onboarding — feature tour"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 015 0c0 1.5-2.5 2-2.5 3.5M12 17h.01"/></svg>
         Take a tour
@@ -32,7 +32,7 @@ onBeforeUnmount(() => { if (modeTimer) clearInterval(modeTimer) })
       <router-link
         to="/settings"
         class="flex items-center gap-2 font-mono text-xs text-slate-500 hover:text-brand-800"
-        :title="isMock ? 'Все запросы идут в localStorage. Клик — открыть Settings' : 'Real API — запросы к бэкенду'"
+        :title="isMock ? 'All requests go to localStorage. Click — open Settings' : 'Real API — live requests to the backend'"
       >
         <span
           class="inline-block h-2 w-2 rounded-full"

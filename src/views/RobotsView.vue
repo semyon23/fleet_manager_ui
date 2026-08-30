@@ -20,7 +20,7 @@ async function deleteRobot(id) {
   try {
     await api.robots.deleteRobot(id)
     store.removeRobot(id)
-    msg.success(`Робот "${id}" удалён`)
+    msg.success(`Robot "${id}" deleted`)
   } catch (e) {
     msg.error(deleteErrorText(e, id))
   }
@@ -72,7 +72,7 @@ const columns = [
           positiveText: 'Delete',
           negativeText: 'Cancel',
         }, {
-          default: () => `Delete robot "${r.id}"? Это уберёт его из fleet на бэке.`,
+          default: () => `Delete robot "${r.id}"? It will be removed from the fleet on the backend.`,
           trigger: () => h(NButton, { size: 'tiny', tertiary: true, type: 'error', title: 'Delete robot' }, { default: () => '✕' }),
         }),
       ]),
@@ -85,11 +85,11 @@ const submitting = ref(false)
 const form = ref({ name: '', manufacturer: '', amr_class: 'CARRIER' })
 
 const amrClassOptions = [
-  { label: 'CARRIER — грузовая тележка', value: 'CARRIER' },
-  { label: 'FORKLIFT — вилочный погрузчик', value: 'FORKLIFT' },
-  { label: 'TUGGER — тягач', value: 'TUGGER' },
-  { label: 'TOWING — буксировщик', value: 'TOWING' },
-  { label: 'MOBILE_ROBOT — прочий AMR', value: 'MOBILE_ROBOT' },
+  { label: 'CARRIER — cargo cart', value: 'CARRIER' },
+  { label: 'FORKLIFT — forklift', value: 'FORKLIFT' },
+  { label: 'TUGGER — tugger', value: 'TUGGER' },
+  { label: 'TOWING — towing', value: 'TOWING' },
+  { label: 'MOBILE_ROBOT — other AMR', value: 'MOBILE_ROBOT' },
 ]
 
 function openRegister() {
@@ -97,27 +97,28 @@ function openRegister() {
   showRegister.value = true
 }
 
-// Читаемые сообщения по статусам от бэка Семёна вместо технических кодов.
+// Human-readable messages by backend status codes (UI is English-only for now,
+// language toggle will be added later per Semyon 2026-08-30).
 function registerErrorText(e, name) {
-  if (e?.status === 409) return `Робот с именем "${name}" уже существует в системе`
-  if (e?.status === 400) return 'Неверные данные — проверь имя робота и попробуй ещё раз'
-  if (e?.status === 0 || e?.code === 'NETWORK') return 'Нет связи с бэкендом — проверь что сервер запущен'
-  if (e?.code === 'TIMEOUT') return 'Бэкенд слишком долго не отвечает'
-  if (e?.status >= 500) return 'Ошибка на стороне бэкенда, попробуй позже'
-  return e?.message || 'Не удалось добавить робота'
+  if (e?.status === 409) return `A robot named "${name}" already exists in the system`
+  if (e?.status === 400) return 'Invalid data — check the robot name and try again'
+  if (e?.status === 0 || e?.code === 'NETWORK') return 'No connection to the backend — check that the server is running'
+  if (e?.code === 'TIMEOUT') return 'Backend is not responding'
+  if (e?.status >= 500) return 'Backend error, please try again later'
+  return e?.message || 'Failed to register the robot'
 }
 function deleteErrorText(e, name) {
-  if (e?.status === 404) return `Робот "${name}" уже удалён или его нет в системе`
-  if (e?.status === 409) return `Робот "${name}" сейчас активен — сначала останови его, потом удаляй`
-  if (e?.status === 400) return 'Не удалось удалить — некорректный запрос'
-  if (e?.status === 0 || e?.code === 'NETWORK') return 'Нет связи с бэкендом'
-  if (e?.code === 'TIMEOUT') return 'Бэкенд слишком долго не отвечает'
-  if (e?.status >= 500) return 'Ошибка на стороне бэкенда'
-  return e?.message || `Не удалось удалить робота "${name}"`
+  if (e?.status === 404) return `Robot "${name}" is already deleted or not in the system`
+  if (e?.status === 409) return `Robot "${name}" is currently active — stop it first, then delete`
+  if (e?.status === 400) return 'Failed to delete — invalid request'
+  if (e?.status === 0 || e?.code === 'NETWORK') return 'No connection to the backend'
+  if (e?.code === 'TIMEOUT') return 'Backend is not responding'
+  if (e?.status >= 500) return 'Backend error'
+  return e?.message || `Failed to delete robot "${name}"`
 }
 
 async function submitRegister() {
-  if (!form.value.name.trim()) return msg.error('Укажи имя робота')
+  if (!form.value.name.trim()) return msg.error('Name is required')
   submitting.value = true
   const name = form.value.name.trim()
   try {
@@ -128,8 +129,8 @@ async function submitRegister() {
     })
     store.addRobot({ ...form.value, name })
     msg.success(api.getMockMode()
-      ? `Робот "${resp.robot_id}" добавлен (mock)`
-      : `Робот "${resp.robot_id}" добавлен`)
+      ? `Robot "${resp.robot_id}" registered (mock)`
+      : `Robot "${resp.robot_id}" registered`)
     showRegister.value = false
   } catch (e) {
     msg.error(registerErrorText(e, name))
@@ -180,8 +181,9 @@ async function submitRegister() {
         </label>
 
         <div class="rounded bg-slate-50 p-3 text-xs text-slate-600">
-          Отправит <code>POST /api/fms/robots</code> на бэк. После success робот
-          появится в списке. Позиция/статус придут по WebSocket когда робот выйдет на связь.
+          Sends <code>POST /api/fms/robots</code> to the backend. After a success
+          response the robot appears in the list. Position and status will arrive over
+          WebSocket once the robot comes online.
         </div>
       </div>
 

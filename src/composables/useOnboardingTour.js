@@ -41,8 +41,8 @@ export function useOnboardingTour(router) {
     {
       element: '[data-tour="sidebar-nav"]',
       popover: {
-        title: '👋 Привет!',
-        description: 'Это Fleet Manager — панель для управления парком AGV/AMR-роботов по стандарту VDA5050. Слева — 8 разделов, пройдёмся по каждому.',
+        title: '👋 Hi!',
+        description: 'This is Fleet Manager — a dashboard to manage a fleet of AGV/AMR robots based on the VDA5050 standard. On the left are 8 sections — we\'ll go through each.',
         side: 'right',
         align: 'center',
       },
@@ -51,7 +51,7 @@ export function useOnboardingTour(router) {
       element: '[data-tour="nav-dashboard"]',
       popover: {
         title: 'Dashboard',
-        description: 'KPI парка + лента событий + fleet snapshot. Сюда попадаешь после логина — общая картина за 2 секунды.',
+        description: 'Fleet KPIs + event feed + fleet snapshot. You land here after login — the big picture in two seconds.',
         side: 'right',
       },
     },
@@ -60,7 +60,7 @@ export function useOnboardingTour(router) {
       element: '[data-tour="nav-live"]',
       popover: {
         title: 'Live Map',
-        description: 'Реальное положение роботов на карте склада. Пока моки — потом здесь будет real-time через MQTT/WebSocket.',
+        description: 'Real robot positions on the warehouse map. Currently mocked — will go real-time via MQTT/WebSocket.',
         side: 'right',
       },
       onHighlightStarted: async () => {
@@ -72,7 +72,7 @@ export function useOnboardingTour(router) {
       element: '[data-tour="nav-maps"]',
       popover: {
         title: 'Maps',
-        description: 'Здесь ты загружаешь ROS 2 Nav2 карты (PGM + YAML метаданные) или пробуешь готовые samples. Идём в Map Editor.',
+        description: 'Upload ROS 2 Nav2 maps here (PGM + YAML metadata) or try the built-in samples. Let\'s open the Map Editor.',
         side: 'right',
       },
       onHighlightStarted: async () => {
@@ -84,7 +84,7 @@ export function useOnboardingTour(router) {
       element: '.editor-root',
       popover: {
         title: 'Map Editor',
-        description: 'Здесь ты рисуешь маршруты роботов: точки (nodes), связи (edges), станции зарядки/парковки. Экспорт в VDA5050 LIF и Nav2 GeoJSON.',
+        description: 'Draw robot routes here: points (nodes), links (edges), charge/parking stations. Export to VDA5050 LIF and Nav2 GeoJSON.',
         side: 'top',
         align: 'center',
       },
@@ -105,8 +105,8 @@ export function useOnboardingTour(router) {
     {
       element: '.tool-btn',  // первая тулбар-кнопка (Select)
       popover: {
-        title: 'Тулбар инструментов',
-        description: 'Slева направо: Select (V), Node (N), Batch Points (B), Batch Lines (L), Edge (E), Station (S), Set Origin (O), Calibrate (K). Хоткеи в скобках.',
+        title: 'Toolbar',
+        description: 'Left to right: Select (V), Node (N), Batch Points (B), Batch Lines (L), Edge (E), Station (S), Set Origin (O), Calibrate (K). Hotkeys in brackets.',
         side: 'bottom',
       },
     },
@@ -114,7 +114,7 @@ export function useOnboardingTour(router) {
       element: 'button[title^="Set Origin"]',
       popover: {
         title: '🎯 Set Origin (O)',
-        description: 'Один клик на карте → эта точка становится world (0, 0). Метровые линейки перерисуются.',
+        description: 'One click on the map → this point becomes world (0, 0). The meter rulers redraw.',
         side: 'bottom',
       },
     },
@@ -122,7 +122,7 @@ export function useOnboardingTour(router) {
       element: 'button[title^="Calibrate"]',
       popover: {
         title: '📏 Calibrate (K)',
-        description: 'Два клика → введи реальное расстояние в метрах → resolution пересчитается. Спасает если SLAM выдал кривой масштаб.',
+        description: 'Two clicks → enter the real distance in meters → resolution is recomputed. Saves you when SLAM produced a wrong scale.',
         side: 'bottom',
       },
     },
@@ -130,7 +130,7 @@ export function useOnboardingTour(router) {
       element: 'button[title^="Toggle SLAM"]',
       popover: {
         title: 'SLAM Background',
-        description: 'Прячет/показывает PGM-подложку. Иногда мешает — выключаешь, оставляешь только твои точки.',
+        description: 'Hide/show the PGM background. Sometimes it gets in the way — turn it off and see only your own points.',
         side: 'bottom',
       },
     },
@@ -138,7 +138,7 @@ export function useOnboardingTour(router) {
       element: 'button[title^="Snap to grid"]',
       popover: {
         title: 'Snap-to-grid + Sequential IDs',
-        description: 'Snap: новые точки прилипают к сетке. Соседняя кнопка #01 — режим ID: n001/n002 вместо случайных n8519_7388.',
+        description: 'Snap: new points stick to the grid. The neighbouring #01 button toggles ID mode: n001 / n002 instead of random n8519_7388.',
         side: 'bottom',
       },
     },
@@ -146,8 +146,8 @@ export function useOnboardingTour(router) {
     {
       element: '.zoom-btn',
       popover: {
-        title: '🔍 Zoom + оси',
-        description: 'Правый верх — +/−/1:1/fit. Сверху и слева — метровые линейки с адаптивным шагом (0.1м...500м).',
+        title: '🔍 Zoom + rulers',
+        description: 'Top-right — +/−/1:1/fit. Top and left — meter rulers with adaptive step (0.1m…500m).',
         side: 'left',
       },
     },
@@ -156,7 +156,7 @@ export function useOnboardingTour(router) {
       element: '[data-tour="preview-json"]',
       popover: {
         title: 'Preview JSON',
-        description: 'Смотришь текущую карту в двух форматах: Nav2 GeoJSON и VDA5050 LIF. Плюс таб Validate — orphan edges, дубли, изолированные точки.',
+        description: 'View the current map in two formats: Nav2 GeoJSON and VDA5050 LIF. Plus a Validate tab — orphan edges, duplicates, isolated points.',
         side: 'bottom',
       },
     },
@@ -164,15 +164,15 @@ export function useOnboardingTour(router) {
     {
       popover: {
         title: '⌨️ Cheatsheet',
-        description: 'Нажми ? в любой момент — откроется список всех горячих клавиш. И этот тур можно перезапустить через Help → Take a tour.',
+        description: 'Press ? any time — the full hotkey list opens. And this tour can be restarted via Help → Take a tour.',
         align: 'center',
       },
     },
     // === Финал ===
     {
       popover: {
-        title: '🚀 Всё, ты в курсе.',
-        description: 'Дальше — грузи свою карту (Maps → + New map), рисуй маршруты, экспортируй LIF. Бэкенд подключим когда Семён даст API. Удачи!',
+        title: '🚀 That\'s it, you\'re up to speed.',
+        description: 'Next — load your own map (Maps → + New map), draw routes, export LIF. Backend will hook in as the API endpoints land. Good luck!',
         align: 'center',
       },
     },
@@ -182,10 +182,10 @@ export function useOnboardingTour(router) {
   function makeDriver() {
     return driver({
       showProgress: true,
-      progressText: '{{current}} из {{total}}',
-      nextBtnText: 'Далее →',
-      prevBtnText: '← Назад',
-      doneBtnText: 'Готово',
+      progressText: '{{current}} of {{total}}',
+      nextBtnText: 'Next →',
+      prevBtnText: '← Back',
+      doneBtnText: 'Done',
       allowClose: true,
       overlayOpacity: 0.55,
       steps,

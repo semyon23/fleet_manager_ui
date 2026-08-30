@@ -10,7 +10,7 @@ const baseUrl = ref(getBaseUrl())
 function toggleMocks(v) {
   useMocks.value = v
   setMockMode(v)
-  msg.success(v ? 'Mock-режим включён — данные из localStorage' : 'Real-режим — запросы к бэку')
+  msg.success(v ? 'Mock mode ON — data from localStorage' : 'Real mode — live HTTP requests to backend')
 }
 </script>
 
@@ -24,14 +24,14 @@ function toggleMocks(v) {
               <div>
                 <div class="text-sm font-semibold">Mock mode</div>
                 <div class="text-xs text-slate-500">
-                  Включён — все запросы идут в localStorage-стабы.
-                  Выключен — реальные HTTP-запросы к бэкенду.
+                  ON — all requests go to localStorage stubs.
+                  OFF — real HTTP requests to the backend.
                 </div>
               </div>
               <NSwitch :value="useMocks" @update:value="toggleMocks" />
             </div>
             <div class="flex items-center gap-2 text-xs">
-              Статус:
+              Status:
               <NTag v-if="useMocks" type="warning" size="small">MOCKS</NTag>
               <NTag v-else type="success" size="small">REAL</NTag>
               <span class="text-slate-500">·</span>
@@ -43,8 +43,8 @@ function toggleMocks(v) {
             REST API base URL
             <NInput v-model:value="baseUrl" placeholder="/api" class="mt-1" />
             <div class="mt-1 text-[10px] text-slate-500">
-              Настраивается через <code class="rounded bg-slate-100 px-1">VITE_API_BASE_URL</code> при билде.
-              Runtime-подмена — планируем на следующей итерации.
+              Configured via <code class="rounded bg-slate-100 px-1">VITE_API_BASE_URL</code> at build time.
+              Runtime override — planned for the next iteration.
             </div>
           </label>
         </div>
