@@ -34,12 +34,11 @@ export async function registerRobot(payload) {
   return request('POST', '/fms/robots', { body: payload, schema: RegisterRobotResponse })
 }
 
-// Удаление робота из fleet. Семён (2026-08-30) в handler'е проверяет что в body
-// есть И name, И manufacturer — без manufacturer вернёт 400. По коду поле пустой
-// строкой ему тоже подходит.
+// Удаление робота из fleet. Семён (2026-08-30) договорились: только name в body,
+// manufacturer больше не требуется.
 export async function deleteRobot(name) {
   if (getMockMode()) return withMockDelay(mocks.deleteRobot(name))
-  return request('DELETE', '/fms/robots', { body: { name, manufacturer: '' } })
+  return request('DELETE', '/fms/robots', { body: { name } })
 }
 
 export async function sendCommand(id, action) {
