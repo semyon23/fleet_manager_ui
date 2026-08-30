@@ -93,6 +93,12 @@ export const useRobotsStore = defineStore('robots', () => {
     })
   }
 
+  // Локально убрать робота по id (после успешного api.robots.deleteRobot).
+  // Polling всё равно догонит через 1 сек, но UX отзывчивее сразу.
+  function removeRobot(id) {
+    robots.value = robots.value.filter((r) => r.id !== id)
+  }
+
   // Замерджить свежий список с бэка (GET /fms/robots). Известным роботам
   // сохраняем sprites — их бэк не отдаёт, это фронтовое поле.
   function mergeRobots(freshList) {
@@ -105,7 +111,7 @@ export const useRobotsStore = defineStore('robots', () => {
 
   return {
     robots, counts, totalBattery,
-    addRobot, mergeRobots,
+    addRobot, mergeRobots, removeRobot,
     pollingActive, lastPollAt, lastPollError,
     startPolling, stopPolling,
   }

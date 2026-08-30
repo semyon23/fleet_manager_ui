@@ -34,6 +34,14 @@ export async function registerRobot(payload) {
   return request('POST', '/fms/robots', { body: payload, schema: RegisterRobotResponse })
 }
 
+// Удаление робота из fleet. Семён (2026-08-30) зарегистрировал DELETE /api/fms/robots
+// без :id в пути. По REST-конвенции путь без параметра ожидает name в body или в query.
+// Ставим на body (как POST); если Семён скажет query — поменяем на GET-стиль.
+export async function deleteRobot(name) {
+  if (getMockMode()) return withMockDelay(mocks.deleteRobot(name))
+  return request('DELETE', '/fms/robots', { body: { name } })
+}
+
 export async function sendCommand(id, action) {
   if (getMockMode()) return withMockDelay(mocks.sendCommand(id, action))
   return request('POST', `/fms/robots/${encodeURIComponent(id)}/command`, { body: { action } })

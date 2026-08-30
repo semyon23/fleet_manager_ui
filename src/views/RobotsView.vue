@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRobotsStore } from '../stores/robots'
-import { NCard, NDataTable, NTag, NButton, NModal, NInput, NSelect, NSwitch, useMessage } from 'naive-ui'
+import { NCard, NDataTable, NTag, NButton, NModal, NInput, NSelect, NSwitch, NPopconfirm, useMessage } from 'naive-ui'
 import { h } from 'vue'
 import { previewSpriteFor, tintStyle } from '../lib/robotSprite'
 import * as api from '../api'
@@ -14,6 +14,18 @@ const msg = useMessage()
 function toggleLive(val) {
   if (val) store.startPolling()
   else store.stopPolling()
+}
+
+async function deleteRobot(id) {
+  try {
+    await api.robots.deleteRobot(id)
+    store.removeRobot(id)
+    msg.success(`Robot ${id} deleted`)
+  } catch (e) {
+    if (e instanceof api.ApiError) msg.error(`${e.code} — ${e.message}`)
+    else if (e.status === 404) msg.error(`Robot ${id} not found on backend`)
+    else msg.error(e.message || 'Delete failed')
+  }
 }
 
 const statusColor = {
@@ -50,11 +62,19 @@ const columns = [
   {
     title: 'Actions',
     key: 'actions',
-    render: () =>
+    render: (r) =>
       h('div', { class: 'flex gap-1' }, [
         h(NButton, { size: 'tiny' }, { default: () => 'Pause' }),
         h(NButton, { size: 'tiny', type: 'error' }, { default: () => 'Stop' }),
         h(NButton, { size: 'tiny', type: 'primary' }, { default: () => 'Home' }),
+        h(NPopconfirm, {
+          onPositiveClick: () => deleteRobot(r.id),
+          positiveText: 'Delete',
+          negativeText: 'Cancel',
+        }, {
+          default: () => `Delete robot "${r.id}"? Это уберёт его из fleet на бэке.`,
+          trigger: () => h(NButton, { size: 'tiny', tertiary: true, type: 'error', title: 'Delete robot' }, { default: () => '✕' }),
+        }),
       ]),
   },
 ]

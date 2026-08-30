@@ -20,6 +20,13 @@ export function getRobot(id) {
   if (!r) { const e = new Error('Robot not found'); e.status = 404; throw e }
   return { ...r }
 }
+export function deleteRobot(name) {
+  const i = MOCK_ROBOTS.findIndex((r) => r.id === name)
+  if (i === -1) { const e = new Error('Robot not found'); e.status = 404; throw e }
+  MOCK_ROBOTS.splice(i, 1)
+  return null
+}
+
 // Регистрация нового робота. Возвращаем в формате бэка Семёна.
 export function registerRobot({ name, manufacturer, amr_class = 'CARRIER' }) {
   if (MOCK_ROBOTS.some((r) => r.id === name)) {
