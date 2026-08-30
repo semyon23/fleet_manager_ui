@@ -34,12 +34,12 @@ export async function registerRobot(payload) {
   return request('POST', '/fms/robots', { body: payload, schema: RegisterRobotResponse })
 }
 
-// Удаление робота из fleet. Семён (2026-08-30) зарегистрировал DELETE /api/fms/robots
-// без :id в пути. По REST-конвенции путь без параметра ожидает name в body или в query.
-// Ставим на body (как POST); если Семён скажет query — поменяем на GET-стиль.
+// Удаление робота из fleet. Семён (2026-08-30) в handler'е проверяет что в body
+// есть И name, И manufacturer — без manufacturer вернёт 400. По коду поле пустой
+// строкой ему тоже подходит.
 export async function deleteRobot(name) {
   if (getMockMode()) return withMockDelay(mocks.deleteRobot(name))
-  return request('DELETE', '/fms/robots', { body: { name } })
+  return request('DELETE', '/fms/robots', { body: { name, manufacturer: '' } })
 }
 
 export async function sendCommand(id, action) {

@@ -108,6 +108,7 @@ function registerErrorText(e, name) {
 }
 function deleteErrorText(e, name) {
   if (e?.status === 404) return `Робот "${name}" уже удалён или его нет в системе`
+  if (e?.status === 409) return `Робот "${name}" сейчас активен — сначала останови его, потом удаляй`
   if (e?.status === 400) return 'Не удалось удалить — некорректный запрос'
   if (e?.status === 0 || e?.code === 'NETWORK') return 'Нет связи с бэкендом'
   if (e?.code === 'TIMEOUT') return 'Бэкенд слишком долго не отвечает'
