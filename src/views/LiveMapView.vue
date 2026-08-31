@@ -1,7 +1,7 @@
 <script setup>
 import { useRobotsStore } from '../stores/robots'
 import { useMapsStore } from '../stores/maps'
-import { NCard, NTag, NSelect } from 'naive-ui'
+import { NCard, NTag, NSelect, NSwitch } from 'naive-ui'
 import { ref, computed, watchEffect } from 'vue'
 import { spriteFor, previewSpriteFor, tintStyle } from '../lib/robotSprite'
 import { stationKindMeta } from '../lib/theme'
@@ -43,6 +43,9 @@ const filteredRobots = computed(() => {
   return robots.robots.filter((r) => activeMap.value.assignedRobots.includes(r.id))
 })
 
+// Показывать сохранённые маршруты (waypoints + edges) поверх карты
+const showRoutes = ref(true)
+
 // Stations — та же палитра что в редакторе (см. lib/theme.js)
 // PGM-пиксели → SVG-координаты (та же трансформация что у background image)
 const pgmScale = computed(() => (activeMap.value ? 580 / activeMap.value.width : 1))
@@ -63,6 +66,37 @@ const stations = computed(() => {
   })
 })
 
+// Waypoints карты в screen-координатах — рисуем как маленькие точки
+const waypoints = computed(() => {
+  if (!showRoutes.value || !activeMap.value?.waypoints?.length) return []
+  const s = pgmScale.value
+  return activeMap.value.waypoints.map((wp) => ({
+    id: wp.id,
+    name: wp.name || wp.id,
+    x: 60 + wp.u * s,
+    y: 60 + wp.v * s,
+  }))
+})
+
+// Edges = линии между двумя waypoints. Собираем координаты через lookup.
+const edges = computed(() => {
+  if (!showRoutes.value || !activeMap.value?.edges?.length) return []
+  const s = pgmScale.value
+  const byId = new Map(activeMap.value.waypoints.map((w) => [w.id, w]))
+  const out = []
+  for (const e of activeMap.value.edges) {
+    const a = byId.get(e.from)
+    const b = byId.get(e.to)
+    if (!a || !b) continue
+    out.push({
+      id: e.id,
+      x1: 60 + a.u * s, y1: 60 + a.v * s,
+      x2: 60 + b.u * s, y2: 60 + b.v * s,
+    })
+  }
+  return out
+})
+
 const markers = computed(() =>
   filteredRobots.value.map((r) => ({
     ...r,
@@ -79,7 +113,7 @@ const markers = computed(() =>
 
 <template>
   <div class="grid grid-cols-1 gap-6 lg:grid-cols-4">
-    <NCard size="small" class="lg:col-span-3 !bg-white">
+    <NCard size="small" class="lg:col-span-3 !bg-white dark:!bg-slate-900">
       <template #header>
         <div class="flex items-center gap-3">
           <span class="text-base font-semibold">Live Map</span>
@@ -92,6 +126,12 @@ const markers = computed(() =>
           />
           <span v-else class="text-xs text-slate-500">No maps uploaded yet</span>
         </div>
+      </template>
+      <template #header-extra>
+        <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          Show routes
+          <NSwitch v-model:value="showRoutes" size="small" />
+        </label>
       </template>
 
       <div class="relative overflow-hidden rounded border border-slate-200 bg-slate-100" style="height: 640px">
@@ -147,6 +187,21 @@ const markers = computed(() =>
             <rect x="450" y="400" width="150" height="100" fill="#fef3c7" stroke="#eab308" stroke-dasharray="4 4" />
             <text x="460" y="425" font-size="11" fill="#92400e" font-family="monospace">LOADING</text>
           </template>
+
+          <!-- Route edges — линии между waypoints (тонкие, под остальным) -->
+          <g v-if="showRoutes" stroke="#1e40af" stroke-opacity="0.55" stroke-width="1.5" fill="none">
+            <line v-for="e in edges" :key="e.id"
+                  :x1="e.x1" :y1="e.y1" :x2="e.x2" :y2="e.y2" stroke-linecap="round" />
+          </g>
+
+          <!-- Waypoints — маленькие точки с id-подписью -->
+          <g v-if="showRoutes">
+            <g v-for="wp in waypoints" :key="wp.id" :transform="`translate(${wp.x} ${wp.y})`">
+              <circle r="4" fill="#1e40af" stroke="#ffffff" stroke-width="1.5" />
+              <text y="-8" text-anchor="middle" font-size="8" font-family="JetBrains Mono, monospace"
+                    fill="#1e3a8a" opacity="0.75">{{ wp.name }}</text>
+            </g>
+          </g>
 
           <!-- Stations из карты — rounded square + белая иконка типа -->
           <g v-for="st in stations" :key="st.id" :transform="`translate(${st.x} ${st.y})`">
@@ -284,7 +339,7 @@ const markers = computed(() =>
       </div>
     </NCard>
 
-    <NCard :title="selected ? selected.id : 'Robot details'" size="small" class="!bg-white">
+    <NCard :title="selected ? selected.id : 'Robot details'" size="small" class="!bg-white dark:!bg-slate-900">
       <div v-if="!selected" class="text-sm text-slate-500">Click a robot to see full details.</div>
       <div v-else class="flex flex-col gap-3 text-sm">
         <div class="grid place-items-center rounded bg-slate-100 py-3">

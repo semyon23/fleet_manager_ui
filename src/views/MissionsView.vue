@@ -7,12 +7,8 @@ import { useMapsStore } from '../stores/maps'
 const maps = useMapsStore()
 const msg = useMessage()
 
-const missions = ref([
-  { id: 'M-107', robot: 'amr-04', from: 'A-12', to: 'B-04', progress: 65, state: 'running' },
-  { id: 'M-104', robot: 'amr-01', from: 'CH-01', to: 'A-03', progress: 40, state: 'running' },
-  { id: 'M-103', robot: 'amr-03', from: 'B-08', to: 'CH-02', progress: 100, state: 'completed' },
-  { id: 'M-102', robot: 'amr-02', from: 'A-01', to: 'B-11', progress: 12, state: 'failed' },
-])
+// Демо-миссии убраны 2026-08-31: реальные приходят с бэка через GET /fms/missions.
+const missions = ref([])
 
 const stateColor = { running: '#22c55e', completed: '#3b82f6', failed: '#ef4444', queued: '#94a3b8', pending: '#94a3b8' }
 
@@ -73,7 +69,7 @@ const columns = [
 </script>
 
 <template>
-  <NCard title="Missions" size="small" class="!bg-white">
+  <NCard title="Missions" size="small" class="!bg-white dark:!bg-slate-900">
     <template #header-extra>
       <NButton type="primary" size="small" @click="openCreate">+ Create mission</NButton>
     </template>

@@ -15,13 +15,8 @@ const kpis = computed(() => [
   { label: 'Avg battery', value: `${store.totalBattery}%`, tone: 'brand' },
 ])
 
-const events = [
-  { time: '15:42:11', robot: 'amr-04', text: 'Started mission M-107' },
-  { time: '15:41:58', robot: 'amr-05', text: 'Error: obstacle detected, halted' },
-  { time: '15:40:12', robot: 'amr-02', text: 'Arrived at charger CH-02' },
-  { time: '15:38:04', robot: 'amr-01', text: 'Mission M-104 waypoint 3/5' },
-  { time: '15:35:19', robot: 'amr-03', text: 'Waiting for task' },
-]
+// Демо-события убраны 2026-08-31. Пока WebSocket-стрим не подключён — таблица пуста.
+const events = []
 
 const columns = [
   { title: 'Time', key: 'time', render: (r) => h('span', { class: 'font-mono text-xs text-slate-500' }, r.time) },
@@ -33,17 +28,17 @@ const columns = [
 <template>
   <div class="flex flex-col gap-6">
     <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-      <NCard v-for="kpi in kpis" :key="kpi.label" size="small" class="!bg-white">
+      <NCard v-for="kpi in kpis" :key="kpi.label" size="small" class="!bg-white dark:!bg-slate-900">
         <div class="text-xs uppercase tracking-wider text-slate-500">{{ kpi.label }}</div>
         <div class="mt-2 font-mono text-3xl font-bold text-brand-900">{{ kpi.value }}</div>
       </NCard>
     </div>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <NCard title="Recent events" size="small" class="lg:col-span-2 !bg-white">
+      <NCard title="Recent events" size="small" class="lg:col-span-2 !bg-white dark:!bg-slate-900">
         <NDataTable :columns="columns" :data="events" :bordered="false" size="small" />
       </NCard>
-      <NCard title="Fleet snapshot" size="small" class="!bg-white">
+      <NCard title="Fleet snapshot" size="small" class="!bg-white dark:!bg-slate-900">
         <div class="flex flex-col gap-1">
           <div
             v-for="r in store.robots"

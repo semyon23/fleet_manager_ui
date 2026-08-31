@@ -141,7 +141,7 @@ async function submitRegister() {
 </script>
 
 <template>
-  <NCard title="Robots" size="small" class="!bg-white">
+  <NCard title="Robots" size="small" class="!bg-white dark:!bg-slate-900">
     <template #header-extra>
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-2 text-xs text-slate-500">

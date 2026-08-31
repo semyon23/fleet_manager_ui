@@ -182,7 +182,7 @@ const columns = [
 </script>
 
 <template>
-  <NCard title="Maps" size="small" class="!bg-white">
+  <NCard title="Maps" size="small" class="!bg-white dark:!bg-slate-900">
     <template #header-extra>
       <NButton type="primary" size="small" @click="showModal = true">+ New map</NButton>
     </template>

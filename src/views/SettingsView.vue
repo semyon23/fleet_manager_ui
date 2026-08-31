@@ -15,7 +15,7 @@ function toggleMocks(v) {
 </script>
 
 <template>
-  <NCard title="Settings" size="small" class="!bg-white">
+  <NCard title="Settings" size="small" class="!bg-white dark:!bg-slate-900">
     <NTabs type="line">
       <NTabPane name="api" tab="API">
         <div class="grid max-w-2xl grid-cols-1 gap-6">

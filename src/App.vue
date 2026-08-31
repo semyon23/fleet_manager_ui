@@ -1,11 +1,12 @@
 <script setup>
-import { NConfigProvider, NMessageProvider } from 'naive-ui'
+import { NConfigProvider, NMessageProvider, darkTheme } from 'naive-ui'
 import { useRouter } from 'vue-router'
-import { onMounted, onBeforeUnmount, provide } from 'vue'
+import { onMounted, onBeforeUnmount, provide, computed } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import AppTopbar from './components/AppTopbar.vue'
 import { useOnboardingTour } from './composables/useOnboardingTour'
 import { useRobotsStore } from './stores/robots'
+import { useTheme } from './composables/useTheme'
 
 const router = useRouter()
 const tour = useOnboardingTour(router)
@@ -13,6 +14,8 @@ const tour = useOnboardingTour(router)
 provide('tour', tour)
 
 const robots = useRobotsStore()
+const { isDark } = useTheme()
+const naiveTheme = computed(() => (isDark.value ? darkTheme : null))
 
 onMounted(() => {
   tour.startIfFirstVisit()
@@ -26,13 +29,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <NConfigProvider :theme-overrides="themeOverrides">
+  <NConfigProvider :theme="naiveTheme" :theme-overrides="themeOverrides">
     <NMessageProvider>
-      <div class="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900">
+      <div class="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <AppSidebar />
         <div class="flex flex-1 flex-col overflow-hidden">
           <AppTopbar />
-          <main class="flex-1 overflow-auto bg-slate-50 p-6">
+          <main class="flex-1 overflow-auto bg-slate-50 p-6 dark:bg-slate-950">
             <RouterView />
           </main>
         </div>

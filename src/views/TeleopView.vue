@@ -1,22 +1,25 @@
 <script setup>
 import { useRobotsStore } from '../stores/robots'
 import { NCard, NSelect } from 'naive-ui'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const store = useRobotsStore()
-const selected = ref(store.robots[0].id)
 const speed = ref(0.3)
 
-const options = store.robots.map((r) => ({ label: `${r.id} (${r.status})`, value: r.id }))
+const options = computed(() =>
+  store.robots.map((r) => ({ label: `${r.id} (${r.status})`, value: r.id })),
+)
+const selected = ref(store.robots[0]?.id || null)
 
 function cmd(action) {
+  if (!selected.value) return
   console.log('[teleop]', selected.value, action, 'speed', speed.value)
 }
 </script>
 
 <template>
   <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-    <NCard title="Manual control" size="small" class="lg:col-span-2 !bg-white">
+    <NCard title="Manual control" size="small" class="lg:col-span-2 !bg-white dark:!bg-slate-900">
       <div class="mb-4 flex items-center gap-3">
         <span class="text-sm text-slate-500">Robot:</span>
         <NSelect v-model:value="selected" :options="options" size="small" style="width: 260px" />
@@ -40,7 +43,7 @@ function cmd(action) {
       </div>
     </NCard>
 
-    <NCard title="Live feed" size="small" class="!bg-white">
+    <NCard title="Live feed" size="small" class="!bg-white dark:!bg-slate-900">
       <div class="grid h-64 place-items-center rounded border border-slate-200 bg-slate-900 text-slate-500 font-mono text-sm">
         [ video stream placeholder ]
       </div>

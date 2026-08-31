@@ -14,14 +14,14 @@ const nav = [
 </script>
 
 <template>
-  <aside class="flex h-full w-60 flex-col border-r border-slate-200 bg-white">
-    <div class="flex h-14 items-center gap-2 border-b border-slate-200 px-4">
+  <aside class="flex h-full w-60 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div class="flex h-14 items-center gap-2 border-b border-slate-200 px-4 dark:border-slate-800">
       <div class="grid h-8 w-8 place-items-center rounded bg-brand-800 font-mono text-sm font-bold text-white">
         FM
       </div>
       <div class="flex flex-col">
-        <span class="text-sm font-semibold text-slate-900">Fleet Manager</span>
-        <span class="text-[10px] font-mono text-slate-500">VDA5050 · v0.1</span>
+        <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Fleet Manager</span>
+        <span class="text-[10px] font-mono text-slate-500 dark:text-slate-400">VDA5050 · v0.1</span>
       </div>
     </div>
     <nav class="flex flex-1 flex-col gap-0.5 p-2" data-tour="sidebar-nav">
@@ -29,7 +29,7 @@ const nav = [
         v-for="item in nav"
         :key="item.to"
         :to="item.to"
-        class="group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-brand-50 hover:text-brand-800"
+        class="group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-brand-50 hover:text-brand-800 dark:text-slate-300 dark:hover:bg-brand-950 dark:hover:text-brand-300"
         active-class="!bg-brand-800 !text-white"
         :data-tour="'nav-' + item.to.slice(1)"
       >
@@ -37,8 +37,8 @@ const nav = [
         <span>{{ item.label }}</span>
       </RouterLink>
     </nav>
-    <div class="border-t border-slate-200 px-4 py-3 text-[10px] font-mono text-slate-400">
-      <div>Backend: <span class="text-slate-600">disconnected</span></div>
+    <div class="border-t border-slate-200 px-4 py-3 text-[10px] font-mono text-slate-400 dark:border-slate-800 dark:text-slate-500">
+      <div>Backend: <span class="text-slate-600 dark:text-slate-300">disconnected</span></div>
       <div>MQTT · VDA5050 1.6</div>
     </div>
   </aside>

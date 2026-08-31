@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Активируем dark:-варианты через класс .dark на root (управляется useTheme). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-brand-50: #f0f6ff;
   --color-brand-100: #dbeafe;
@@ -33,4 +36,11 @@ body,
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  background-color: #f8fafc; /* slate-50 — соответствует .bg-slate-50 в light */
+  color: #0f172a; /* slate-900 */
+  transition: background-color 120ms linear, color 120ms linear;
+}
+.dark body {
+  background-color: #020617; /* slate-950 */
+  color: #e2e8f0; /* slate-200 */
 }
