@@ -9,44 +9,54 @@ function systemPrefersDark() {
   return media ? media.matches : false
 }
 
-function loadInitial() {
-  if (typeof localStorage === 'undefined') return 'light'
+// mode: 'light' | 'dark' | 'system' — что явно выбрал пользователь.
+// effective: 'light' | 'dark' — что реально применяется (system разворачивается).
+function loadMode() {
+  if (typeof localStorage === 'undefined') return 'system'
   const saved = localStorage.getItem(LS_KEY)
-  if (saved === 'light' || saved === 'dark') return saved
-  return systemPrefersDark() ? 'dark' : 'light'
+  if (saved === 'light' || saved === 'dark' || saved === 'system') return saved
+  return 'system'
 }
 
-const current = ref(loadInitial())
+const mode = ref(loadMode())
+const effective = ref(mode.value === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : mode.value)
 
-function applyClass(mode) {
+function apply(m) {
   if (typeof document === 'undefined') return
-  document.documentElement.classList.toggle('dark', mode === 'dark')
-  document.documentElement.setAttribute('data-theme', mode)
+  document.documentElement.classList.toggle('dark', m === 'dark')
+  document.documentElement.setAttribute('data-theme', m)
 }
-applyClass(current.value)
+apply(effective.value)
 
-watch(current, (mode) => {
-  applyClass(mode)
-  try { localStorage.setItem(LS_KEY, mode) } catch (_) {}
+watch(mode, (m) => {
+  effective.value = m === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : m
+  apply(effective.value)
+  try {
+    if (m === 'system') localStorage.removeItem(LS_KEY)
+    else localStorage.setItem(LS_KEY, m)
+  } catch (_) {}
 })
 
-// Если пользователь ещё не переключал руками — следуем за system-preference.
 if (media && media.addEventListener) {
   media.addEventListener('change', (e) => {
-    if (!localStorage.getItem(LS_KEY)) current.value = e.matches ? 'dark' : 'light'
+    if (mode.value === 'system') {
+      effective.value = e.matches ? 'dark' : 'light'
+      apply(effective.value)
+    }
   })
 }
 
 export function useTheme() {
-  const theme = computed(() => current.value)
-  const isDark = computed(() => current.value === 'dark')
+  const theme = computed(() => effective.value)
+  const isDark = computed(() => effective.value === 'dark')
+  const currentMode = computed(() => mode.value)
 
-  function setTheme(mode) {
-    if (mode !== 'light' && mode !== 'dark') return
-    current.value = mode
+  function setMode(m) {
+    if (m === 'light' || m === 'dark' || m === 'system') mode.value = m
   }
   function toggle() {
-    current.value = current.value === 'dark' ? 'light' : 'dark'
+    // Тумблер солнце/луна — всегда фиксирует явный выбор (light↔dark), выходит из system.
+    mode.value = effective.value === 'dark' ? 'light' : 'dark'
   }
-  return { theme, isDark, setTheme, toggle }
+  return { theme, isDark, mode: currentMode, setMode, toggle }
 }

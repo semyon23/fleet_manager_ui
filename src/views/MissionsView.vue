@@ -191,7 +191,14 @@ const columns = [
       {{ missionsError }}
     </div>
 
-    <NDataTable :columns="columns" :data="missions" :bordered="false" size="small" />
+    <div v-if="!missions.length" class="py-10">
+      <NEmpty description="No missions in the queue yet">
+        <template #extra>
+          <NButton type="primary" size="small" @click="openBuilder">Create first mission</NButton>
+        </template>
+      </NEmpty>
+    </div>
+    <NDataTable v-else :columns="columns" :data="missions" :bordered="false" size="small" />
 
     <div class="mt-4 rounded bg-slate-50 dark:bg-slate-800 p-3 text-xs text-slate-600 dark:text-slate-400">
       Missions are dispatched by the backend via VDA5050 Order messages. The list refreshes every 3s from

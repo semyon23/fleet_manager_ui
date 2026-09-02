@@ -46,6 +46,21 @@ const filteredRobots = computed(() => {
 // Показывать сохранённые маршруты (waypoints + edges) поверх карты
 const showRoutes = ref(true)
 
+// Zoom: применяется к inner <g> внутри SVG. 1 = fit-to-content viewBox.
+const ZOOM_MIN = 0.25
+const ZOOM_MAX = 5
+const ZOOM_STEP = 1.25
+const zoom = ref(1)
+function zoomIn() { zoom.value = Math.min(ZOOM_MAX, zoom.value * ZOOM_STEP) }
+function zoomOut() { zoom.value = Math.max(ZOOM_MIN, zoom.value / ZOOM_STEP) }
+function zoomReset() { zoom.value = 1 }  // fit-to-content
+const zoomTransform = computed(() => {
+  const w = activeMap.value ? activeMap.value.width + PADDING * 2 : 700
+  const h = activeMap.value ? activeMap.value.height + PADDING * 2 : 600
+  // Zoom относительно центра карты: translate → scale → translate back
+  return `translate(${w / 2} ${h / 2}) scale(${zoom.value}) translate(${-w / 2} ${-h / 2})`
+})
+
 // Fit-to-content: viewBox подстраивается под размер активной карты. Так и маленькие,
 // и большие карты нормально центрируются, а preserveAspectRatio="xMidYMid meet" даёт
 // пропорциональное вписывание в контейнер любой высоты.
@@ -130,7 +145,9 @@ const markers = computed(() =>
             size="small"
             style="width: 240px"
           />
-          <span v-else class="text-xs text-slate-500">No maps uploaded yet</span>
+          <router-link v-else to="/maps" class="text-xs text-brand-700 dark:text-brand-300 hover:underline">
+            No maps uploaded yet → upload one
+          </router-link>
         </div>
       </template>
       <template #header-extra>
@@ -177,6 +194,7 @@ const markers = computed(() =>
           <!-- Grid покрывает всю viewBox — считается через .baseVal чтоб не гардкодить. -->
           <rect x="0" y="0" width="100%" height="100%" fill="url(#grid)" />
 
+          <g :transform="zoomTransform">
           <template v-if="activeMap">
             <image
               :href="activeMap.pgmDataUrl"
@@ -342,7 +360,44 @@ const markers = computed(() =>
               {{ hovered.mission ? 'mission ' + hovered.mission : 'no mission' }}
             </text>
           </g>
+          </g><!-- /zoomTransform -->
         </svg>
+
+        <!-- Zoom controls overlay -->
+        <div class="absolute right-3 top-3 flex flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <button
+            class="grid h-8 w-8 place-items-center border-b border-slate-100 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Zoom in"
+            @click="zoomIn"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button
+            class="grid h-8 w-8 place-items-center border-b border-slate-100 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Zoom out"
+            @click="zoomOut"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+          </button>
+          <button
+            class="grid h-8 w-8 place-items-center border-b border-slate-100 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Reset zoom (1:1)"
+            @click="zoomReset"
+          >
+            <span class="text-[9px] font-semibold">1:1</span>
+          </button>
+          <button
+            class="grid h-8 w-8 place-items-center text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Fit to map"
+            @click="zoomReset"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/></svg>
+          </button>
+        </div>
+
+        <div class="pointer-events-none absolute bottom-2 right-3 rounded bg-white/85 px-2 py-0.5 text-[10px] font-mono text-slate-500 shadow dark:bg-slate-900/85 dark:text-slate-400">
+          zoom {{ Math.round(zoom * 100) }}%
+        </div>
       </div>
     </NCard>
 

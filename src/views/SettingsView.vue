@@ -1,11 +1,13 @@
 <script setup>
 import { ref } from 'vue'
-import { NCard, NInput, NButton, NTabs, NTabPane, NSwitch, NTag, useMessage } from 'naive-ui'
+import { NCard, NInput, NButton, NTabs, NTabPane, NSwitch, NTag, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
 import { getMockMode, setMockMode, getBaseUrl } from '../api'
+import { useTheme } from '../composables/useTheme'
 
 const msg = useMessage()
 const useMocks = ref(getMockMode())
 const baseUrl = ref(getBaseUrl())
+const { mode: themeMode, setMode: setThemeMode } = useTheme()
 
 function toggleMocks(v) {
   useMocks.value = v
@@ -71,7 +73,19 @@ function toggleMocks(v) {
       </NTabPane>
 
       <NTabPane name="general" tab="General">
-        <p class="text-sm text-slate-500">Timezone, units, theme.</p>
+        <div class="grid max-w-lg grid-cols-1 gap-6">
+          <div class="rounded border border-slate-200 dark:border-slate-700 p-4">
+            <div class="mb-3 text-sm font-semibold">Theme</div>
+            <NRadioGroup :value="themeMode.value" @update:value="setThemeMode">
+              <NRadioButton value="light">☀ Light</NRadioButton>
+              <NRadioButton value="dark">🌙 Dark</NRadioButton>
+              <NRadioButton value="system">🖥 System</NRadioButton>
+            </NRadioGroup>
+            <div class="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+              System — follows OS preference (prefers-color-scheme). Persisted in localStorage.
+            </div>
+          </div>
+        </div>
       </NTabPane>
     </NTabs>
   </NCard>
