@@ -1,5 +1,8 @@
 <script setup>
 import { RouterLink } from 'vue-router'
+import { useBackendHealth } from '../composables/useBackendHealth'
+
+const health = useBackendHealth()
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: '□' },
@@ -38,7 +41,10 @@ const nav = [
       </RouterLink>
     </nav>
     <div class="border-t border-slate-200 px-4 py-3 text-[10px] font-mono text-slate-400 dark:border-slate-800 dark:text-slate-500">
-      <div>Backend: <span class="text-slate-600 dark:text-slate-300">disconnected</span></div>
+      <div class="flex items-center gap-1.5">
+        <span class="inline-block h-2 w-2 rounded-full" :style="{ backgroundColor: health.color.value }"></span>
+        <span class="text-slate-600 dark:text-slate-300">{{ health.label.value }}</span>
+      </div>
       <div>MQTT · VDA5050 1.6</div>
     </div>
   </aside>

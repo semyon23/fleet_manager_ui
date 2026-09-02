@@ -7,6 +7,7 @@ import AppTopbar from './components/AppTopbar.vue'
 import { useOnboardingTour } from './composables/useOnboardingTour'
 import { useRobotsStore } from './stores/robots'
 import { useTheme } from './composables/useTheme'
+import { useBackendHealth } from './composables/useBackendHealth'
 
 const router = useRouter()
 const tour = useOnboardingTour(router)
@@ -16,15 +17,19 @@ provide('tour', tour)
 const robots = useRobotsStore()
 const { isDark } = useTheme()
 const naiveTheme = computed(() => (isDark.value ? darkTheme : null))
+const health = useBackendHealth()
 
 onMounted(() => {
   tour.startIfFirstVisit()
   // Глобальный polling GET /fms/robots каждую секунду — таблица, Dashboard,
   // LiveMap и т.д. видят одни и те же живые данные.
   robots.startPolling()
+  // Health-ping /api/health каждые 3 сек — топбар/sidebar показывают индикатор.
+  health.startPing()
 })
 onBeforeUnmount(() => {
   robots.stopPolling()
+  health.stopPing()
 })
 </script>
 

@@ -46,42 +46,48 @@ const filteredRobots = computed(() => {
 // Показывать сохранённые маршруты (waypoints + edges) поверх карты
 const showRoutes = ref(true)
 
-// Stations — та же палитра что в редакторе (см. lib/theme.js)
-// PGM-пиксели → SVG-координаты (та же трансформация что у background image)
-const pgmScale = computed(() => (activeMap.value ? 580 / activeMap.value.width : 1))
+// Fit-to-content: viewBox подстраивается под размер активной карты. Так и маленькие,
+// и большие карты нормально центрируются, а preserveAspectRatio="xMidYMid meet" даёт
+// пропорциональное вписывание в контейнер любой высоты.
+const PADDING = 60  // отступ вокруг карты в пиксельной координатной системе PGM
+const viewBox = computed(() => {
+  if (activeMap.value) {
+    const w = activeMap.value.width + PADDING * 2
+    const h = activeMap.value.height + PADDING * 2
+    return `0 0 ${w} ${h}`
+  }
+  return '0 0 700 600'  // placeholder viewBox для случая "нет карты"
+})
+
+// Stations в пиксельных координатах карты (+PADDING). SVG viewBox уже покрывает нужный диапазон.
 const stations = computed(() => {
   if (!activeMap.value?.stations?.length) return []
-  const s = pgmScale.value
   return activeMap.value.stations.map((st) => {
     const meta = stationKindMeta(st.kind)
     return {
       id: st.id,
       name: st.name || st.id,
       kind: st.kind,
-      x: 60 + st.u * s,
-      y: 60 + st.v * s,
+      x: PADDING + st.u,
+      y: PADDING + st.v,
       color: meta.color,
       icon: meta.icon,
     }
   })
 })
 
-// Waypoints карты в screen-координатах — рисуем как маленькие точки
 const waypoints = computed(() => {
   if (!showRoutes.value || !activeMap.value?.waypoints?.length) return []
-  const s = pgmScale.value
   return activeMap.value.waypoints.map((wp) => ({
     id: wp.id,
     name: wp.name || wp.id,
-    x: 60 + wp.u * s,
-    y: 60 + wp.v * s,
+    x: PADDING + wp.u,
+    y: PADDING + wp.v,
   }))
 })
 
-// Edges = линии между двумя waypoints. Собираем координаты через lookup.
 const edges = computed(() => {
   if (!showRoutes.value || !activeMap.value?.edges?.length) return []
-  const s = pgmScale.value
   const byId = new Map(activeMap.value.waypoints.map((w) => [w.id, w]))
   const out = []
   for (const e of activeMap.value.edges) {
@@ -90,8 +96,8 @@ const edges = computed(() => {
     if (!a || !b) continue
     out.push({
       id: e.id,
-      x1: 60 + a.u * s, y1: 60 + a.v * s,
-      x2: 60 + b.u * s, y2: 60 + b.v * s,
+      x1: PADDING + a.u, y1: PADDING + a.v,
+      x2: PADDING + b.u, y2: PADDING + b.v,
     })
   }
   return out
@@ -134,8 +140,8 @@ const markers = computed(() =>
         </label>
       </template>
 
-      <div class="relative overflow-hidden rounded border border-slate-200 bg-slate-100" style="height: 640px">
-        <svg class="h-full w-full" viewBox="0 0 700 600">
+      <div class="relative overflow-hidden rounded border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800" style="height: calc(100vh - 11rem); min-height: 480px">
+        <svg class="h-full w-full" :viewBox="viewBox" preserveAspectRatio="xMidYMid meet">
           <defs>
             <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
               <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#e2e8f0" stroke-width="1" />
@@ -168,15 +174,16 @@ const markers = computed(() =>
             </filter>
           </defs>
 
-          <rect width="700" height="600" fill="url(#grid)" />
+          <!-- Grid покрывает всю viewBox — считается через .baseVal чтоб не гардкодить. -->
+          <rect x="0" y="0" width="100%" height="100%" fill="url(#grid)" />
 
           <template v-if="activeMap">
             <image
               :href="activeMap.pgmDataUrl"
-              x="60" y="60"
-              width="580"
-              :height="580 * (activeMap.height / activeMap.width)"
-              preserveAspectRatio="xMidYMid meet"
+              :x="60" :y="60"
+              :width="activeMap.width"
+              :height="activeMap.height"
+              preserveAspectRatio="none"
               opacity="0.55"
             />
           </template>

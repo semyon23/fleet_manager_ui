@@ -1,8 +1,8 @@
 <script setup>
 import { useRoute } from 'vue-router'
-import { computed, inject, ref, onMounted, onBeforeUnmount } from 'vue'
-import { getMockMode } from '../api'
+import { computed, inject } from 'vue'
 import { useTheme } from '../composables/useTheme'
+import { useBackendHealth } from '../composables/useBackendHealth'
 
 const route = useRoute()
 const title = computed(() => route.meta?.title || 'Fleet Manager')
@@ -11,11 +11,15 @@ function startTour() { tour?.startTour() }
 
 const { isDark, toggle: toggleTheme } = useTheme()
 
-// Polling mock-режима — user может переключить в Settings без reload
-const isMock = ref(getMockMode())
-let modeTimer = null
-onMounted(() => { modeTimer = setInterval(() => { isMock.value = getMockMode() }, 1000) })
-onBeforeUnmount(() => { if (modeTimer) clearInterval(modeTimer) })
+// Connection indicator — graphic circle instead of the old "backend · real" text.
+// State from /api/health ping (every 3s) or 'mock' when localStorage mock mode is on.
+const health = useBackendHealth()
+const healthTitle = computed(() => {
+  const parts = [health.label.value]
+  if (health.latencyMs.value != null) parts.push(`${health.latencyMs.value} ms`)
+  if (health.lastCheckedAt.value) parts.push(`checked ${health.lastCheckedAt.value.toLocaleTimeString()}`)
+  return parts.join(' · ')
+})
 </script>
 
 <template>
@@ -48,13 +52,19 @@ onBeforeUnmount(() => { if (modeTimer) clearInterval(modeTimer) })
       <router-link
         to="/settings"
         class="flex items-center gap-2 font-mono text-xs text-slate-500 hover:text-brand-800 dark:text-slate-400 dark:hover:text-brand-300"
-        :title="isMock ? 'All requests go to localStorage. Click — open Settings' : 'Real API — live requests to the backend'"
+        :title="healthTitle"
       >
         <span
-          class="inline-block h-2 w-2 rounded-full"
-          :class="isMock ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'"
-        ></span>
-        <span>{{ isMock ? 'backend offline · mocks' : 'backend · real' }}</span>
+          class="relative inline-block h-2.5 w-2.5 rounded-full"
+          :style="{ backgroundColor: health.color.value }"
+        >
+          <span
+            v-if="health.state.value === 'mock' || health.state.value === 'offline'"
+            class="absolute inset-0 rounded-full animate-ping"
+            :style="{ backgroundColor: health.color.value, opacity: 0.55 }"
+          ></span>
+        </span>
+        <span v-if="health.latencyMs.value != null" class="text-slate-400">{{ health.latencyMs.value }}ms</span>
       </router-link>
       <div class="grid h-8 w-8 place-items-center rounded-full bg-brand-100 font-mono text-xs font-semibold text-brand-800 dark:bg-brand-900 dark:text-brand-200">
         AL
