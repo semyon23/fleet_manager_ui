@@ -35,7 +35,8 @@ const hovered = ref(null)
 const SCALE = 25
 const OFFSET_X = 60
 const OFFSET_Y = 60
-const ROBOT_SIZE = 56
+// Roboты уменьшены (Семён 2026-09-06): 56 → 32. Масштабируются вместе с картой (zoom).
+const ROBOT_SIZE = 32
 
 const filteredRobots = computed(() => {
   if (!activeMap.value) return robots.robots
@@ -43,38 +44,60 @@ const filteredRobots = computed(() => {
   return robots.robots.filter((r) => activeMap.value.assignedRobots.includes(r.id))
 })
 
-// Показывать сохранённые маршруты (waypoints + edges) поверх карты
 const showRoutes = ref(true)
 
-// Zoom: применяется к inner <g> внутри SVG. 1 = fit-to-content viewBox.
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 5
 const ZOOM_STEP = 1.25
 const zoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+
 function zoomIn() { zoom.value = Math.min(ZOOM_MAX, zoom.value * ZOOM_STEP) }
 function zoomOut() { zoom.value = Math.max(ZOOM_MIN, zoom.value / ZOOM_STEP) }
-function zoomReset() { zoom.value = 1 }  // fit-to-content
-const zoomTransform = computed(() => {
-  const w = activeMap.value ? activeMap.value.width + PADDING * 2 : 700
-  const h = activeMap.value ? activeMap.value.height + PADDING * 2 : 600
-  // Zoom относительно центра карты: translate → scale → translate back
-  return `translate(${w / 2} ${h / 2}) scale(${zoom.value}) translate(${-w / 2} ${-h / 2})`
-})
+function zoomReset() { zoom.value = 1; panX.value = 0; panY.value = 0 }
 
-// Fit-to-content: viewBox подстраивается под размер активной карты. Так и маленькие,
-// и большие карты нормально центрируются, а preserveAspectRatio="xMidYMid meet" даёт
-// пропорциональное вписывание в контейнер любой высоты.
-const PADDING = 60  // отступ вокруг карты в пиксельной координатной системе PGM
+const PADDING = 60
+
 const viewBox = computed(() => {
   if (activeMap.value) {
     const w = activeMap.value.width + PADDING * 2
     const h = activeMap.value.height + PADDING * 2
     return `0 0 ${w} ${h}`
   }
-  return '0 0 700 600'  // placeholder viewBox для случая "нет карты"
+  return '0 0 700 600'
 })
 
-// Stations в пиксельных координатах карты (+PADDING). SVG viewBox уже покрывает нужный диапазон.
+const zoomTransform = computed(() => {
+  const w = activeMap.value ? activeMap.value.width + PADDING * 2 : 700
+  const h = activeMap.value ? activeMap.value.height + PADDING * 2 : 600
+  return `translate(${panX.value} ${panY.value}) translate(${w / 2} ${h / 2}) scale(${zoom.value}) translate(${-w / 2} ${-h / 2})`
+})
+
+// Pan: мышь драг по SVG. Дельта конвертируется из экранных пикселей в SVG-координаты
+// через отношение viewBox.width / clientWidth.
+const svgRef = ref(null)
+const isDragging = ref(false)
+let dragStart = null
+
+function onMouseDown(e) {
+  if (e.button !== 0) return
+  isDragging.value = true
+  dragStart = { x: e.clientX, y: e.clientY, panX: panX.value, panY: panY.value }
+  e.preventDefault()
+}
+function onMouseMove(e) {
+  if (!isDragging.value || !dragStart || !svgRef.value) return
+  const rect = svgRef.value.getBoundingClientRect()
+  const vb = svgRef.value.viewBox.baseVal
+  const kx = vb.width / rect.width
+  const ky = vb.height / rect.height
+  panX.value = dragStart.panX + (e.clientX - dragStart.x) * kx
+  panY.value = dragStart.panY + (e.clientY - dragStart.y) * ky
+}
+function onMouseUp() { isDragging.value = false; dragStart = null }
+function onMouseLeave() { isDragging.value = false; dragStart = null }
+
 const stations = computed(() => {
   if (!activeMap.value?.stations?.length) return []
   return activeMap.value.stations.map((st) => {
@@ -146,7 +169,7 @@ const markers = computed(() =>
             style="width: 240px"
           />
           <router-link v-else to="/maps" class="text-xs text-brand-700 dark:text-brand-300 hover:underline">
-            No maps uploaded yet → upload one
+            No maps uploaded yet -> upload one
           </router-link>
         </div>
       </template>
@@ -157,31 +180,36 @@ const markers = computed(() =>
         </label>
       </template>
 
-      <div class="relative overflow-hidden rounded border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800" style="height: calc(100vh - 11rem); min-height: 480px">
-        <svg class="h-full w-full" :viewBox="viewBox" preserveAspectRatio="xMidYMid meet">
+      <div
+        class="relative overflow-hidden rounded border border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"
+        style="height: calc(100vh - 11rem); min-height: 480px"
+      >
+        <svg
+          ref="svgRef"
+          class="h-full w-full"
+          :class="isDragging ? 'cursor-grabbing' : 'cursor-grab'"
+          :viewBox="viewBox"
+          preserveAspectRatio="xMidYMid meet"
+          @mousedown="onMouseDown"
+          @mousemove="onMouseMove"
+          @mouseup="onMouseUp"
+          @mouseleave="onMouseLeave"
+        >
           <defs>
             <pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse">
-              <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#e2e8f0" stroke-width="1" />
+              <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#cbd5e1" stroke-width="0.6" />
+            </pattern>
+            <pattern id="grid-dark" width="25" height="25" patternUnits="userSpaceOnUse">
+              <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#334155" stroke-width="0.6" />
             </pattern>
             <filter id="robot-shadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25" />
             </filter>
 
-            <!-- Тонирование спрайта по статусу через hue-rotate.
-                 Базовый цвет свечений робота — синий (~220°).
-                 Белые/чёрные корпусные части не меняются. -->
-            <filter id="tint-moving">
-              <feColorMatrix type="hueRotate" values="-120" />
-            </filter>
-            <filter id="tint-charging">
-              <feColorMatrix type="hueRotate" values="-160" />
-            </filter>
-            <filter id="tint-error">
-              <feColorMatrix type="hueRotate" values="140" />
-            </filter>
-            <filter id="tint-idle">
-              <feColorMatrix type="saturate" values="0.15" />
-            </filter>
+            <filter id="tint-moving"><feColorMatrix type="hueRotate" values="-120" /></filter>
+            <filter id="tint-charging"><feColorMatrix type="hueRotate" values="-160" /></filter>
+            <filter id="tint-error"><feColorMatrix type="hueRotate" values="140" /></filter>
+            <filter id="tint-idle"><feColorMatrix type="saturate" values="0.15" /></filter>
             <filter id="tint-offline">
               <feColorMatrix type="matrix"
                 values="0.33 0.33 0.33 0 0
@@ -191,18 +219,18 @@ const markers = computed(() =>
             </filter>
           </defs>
 
-          <!-- Grid покрывает всю viewBox — считается через .baseVal чтоб не гардкодить. -->
-          <rect x="0" y="0" width="100%" height="100%" fill="url(#grid)" />
+          <rect x="0" y="0" width="100%" height="100%" class="fill-[url(#grid)] dark:fill-[url(#grid-dark)]" />
 
           <g :transform="zoomTransform">
           <template v-if="activeMap">
+            <!-- На светлой теме карту делаем контрастнее (opacity 0.85 vs 0.55) -->
             <image
               :href="activeMap.pgmDataUrl"
               :x="60" :y="60"
               :width="activeMap.width"
               :height="activeMap.height"
               preserveAspectRatio="none"
-              opacity="0.55"
+              class="opacity-80 dark:opacity-60"
             />
           </template>
           <template v-else>
@@ -213,34 +241,32 @@ const markers = computed(() =>
             <text x="460" y="425" font-size="11" fill="#92400e" font-family="monospace">LOADING</text>
           </template>
 
-          <!-- Route edges — линии между waypoints (тонкие, под остальным) -->
-          <g v-if="showRoutes" stroke="#1e40af" stroke-opacity="0.55" stroke-width="1.5" fill="none">
+          <g v-if="showRoutes" stroke="#1e40af" stroke-opacity="0.45" stroke-width="1" fill="none">
             <line v-for="e in edges" :key="e.id"
                   :x1="e.x1" :y1="e.y1" :x2="e.x2" :y2="e.y2" stroke-linecap="round" />
           </g>
 
-          <!-- Waypoints — маленькие точки с id-подписью -->
+          <!-- Waypoints уменьшены (Семён 2026-09-06): r 4→2.5, шрифт 8→7, opacity ниже -->
           <g v-if="showRoutes">
             <g v-for="wp in waypoints" :key="wp.id" :transform="`translate(${wp.x} ${wp.y})`">
-              <circle r="4" fill="#1e40af" stroke="#ffffff" stroke-width="1.5" />
-              <text y="-8" text-anchor="middle" font-size="8" font-family="JetBrains Mono, monospace"
-                    fill="#1e3a8a" opacity="0.75">{{ wp.name }}</text>
+              <circle r="2.5" fill="#1e40af" stroke="#ffffff" stroke-width="1" />
+              <text y="-5" text-anchor="middle" font-size="6" font-family="JetBrains Mono, monospace"
+                    fill="#1e3a8a" opacity="0.65">{{ wp.name }}</text>
             </g>
           </g>
 
-          <!-- Stations из карты — rounded square + белая иконка типа -->
           <g v-for="st in stations" :key="st.id" :transform="`translate(${st.x} ${st.y})`">
-            <rect x="-14" y="-14" width="28" height="28" rx="5"
-                  :fill="st.color" stroke="#ffffff" stroke-width="1.5"
+            <rect x="-10" y="-10" width="20" height="20" rx="4"
+                  :fill="st.color" stroke="#ffffff" stroke-width="1.2"
                   filter="drop-shadow(0 1px 2px rgba(0,0,0,0.25))" />
             <g fill="#ffffff" stroke="none" pointer-events="none">
-              <path v-if="st.icon === 'bolt'" d="M-3 -8 L 4 -1 L 0 -1 L 3 8 L -4 1 L 0 1 Z" />
-              <text v-else-if="st.icon === 'p'" x="0" y="4" text-anchor="middle"
-                    font-size="14" font-weight="700" font-family="system-ui, sans-serif">P</text>
-              <path v-else-if="st.icon === 'loading'" d="M0 -8 L 3.5 -2.5 L 1 -2.5 L 1 2.5 L 3.5 2.5 L 0 8 L -3.5 2.5 L -1 2.5 L -1 -2.5 L -3.5 -2.5 Z" />
-              <polygon v-else-if="st.icon === 'star'" points="0,-8 2.3,-2.5 8,-2.5 3.4,1 5.2,6.5 0,3.2 -5.2,6.5 -3.4,1 -8,-2.5 -2.3,-2.5" />
+              <path v-if="st.icon === 'bolt'" d="M-2.2 -6 L 3 -0.7 L 0 -0.7 L 2.2 6 L -3 0.7 L 0 0.7 Z" />
+              <text v-else-if="st.icon === 'p'" x="0" y="3" text-anchor="middle"
+                    font-size="10" font-weight="700" font-family="system-ui, sans-serif">P</text>
+              <path v-else-if="st.icon === 'loading'" d="M0 -6 L 2.5 -1.8 L 0.7 -1.8 L 0.7 1.8 L 2.5 1.8 L 0 6 L -2.5 1.8 L -0.7 1.8 L -0.7 -1.8 L -2.5 -1.8 Z" />
+              <polygon v-else-if="st.icon === 'star'" points="0,-6 1.7,-1.8 6,-1.8 2.5,0.7 3.9,4.9 0,2.4 -3.9,4.9 -2.5,0.7 -6,-1.8 -1.7,-1.8" />
             </g>
-            <text y="24" text-anchor="middle" font-size="9" font-family="JetBrains Mono, monospace" fill="#475569">
+            <text y="18" text-anchor="middle" font-size="7" font-family="JetBrains Mono, monospace" fill="#475569">
               {{ st.name }}
             </text>
           </g>
@@ -249,7 +275,7 @@ const markers = computed(() =>
             v-for="m in markers"
             :key="m.id"
             style="cursor: pointer"
-            @click="selected = m"
+            @click.stop="selected = m"
             @mouseenter="hovered = m"
             @mouseleave="hovered = null"
           >
@@ -257,16 +283,16 @@ const markers = computed(() =>
               v-if="hovered && hovered.id === m.id"
               :cx="m.px"
               :cy="m.py"
-              :r="ROBOT_SIZE / 2 + 8"
+              :r="ROBOT_SIZE / 2 + 5"
               fill="#f97316"
               fill-opacity="0.28"
             />
 
             <ellipse
               :cx="m.px"
-              :cy="m.py + ROBOT_SIZE / 2 - 4"
-              :rx="ROBOT_SIZE / 2 - 4"
-              ry="4"
+              :cy="m.py + ROBOT_SIZE / 2 - 2"
+              :rx="ROBOT_SIZE / 2 - 3"
+              ry="2.5"
               fill="black"
               fill-opacity="0.18"
             />
@@ -280,31 +306,30 @@ const markers = computed(() =>
               :filter="m.tintFilter"
             />
 
-            <!-- Указатель ориентации только для top-view (когда робот стоит, спрайт симметричный).
-                 Треугольник вокруг корпуса показывает где "перед". -->
             <g v-if="m.isTopView && m.status !== 'offline'"
                :transform="`translate(${m.px} ${m.py}) rotate(${-m.thetaDeg})`">
               <polygon
-                :points="`${ROBOT_SIZE / 2 + 6},0 ${ROBOT_SIZE / 2 + 14},-5 ${ROBOT_SIZE / 2 + 14},5`"
+                :points="`${ROBOT_SIZE / 2 + 3},0 ${ROBOT_SIZE / 2 + 9},-3 ${ROBOT_SIZE / 2 + 9},3`"
                 :fill="m.stroke"
                 stroke="white"
-                stroke-width="1"
+                stroke-width="0.7"
               />
             </g>
 
-            <g :transform="`translate(${m.px + ROBOT_SIZE / 2 - 6} ${m.py - ROBOT_SIZE / 2 + 6})`">
-              <circle r="6" fill="white" />
-              <circle r="5" :fill="m.stroke" />
+            <g :transform="`translate(${m.px + ROBOT_SIZE / 2 - 4} ${m.py - ROBOT_SIZE / 2 + 4})`">
+              <circle r="3.5" fill="white" />
+              <circle r="2.8" :fill="m.stroke" />
             </g>
 
             <text
               :x="m.px"
-              :y="m.py + ROBOT_SIZE / 2 + 22"
+              :y="m.py + ROBOT_SIZE / 2 + 10"
               text-anchor="middle"
-              font-size="10"
+              font-size="7"
               font-family="JetBrains Mono, monospace"
               fill="#0f172a"
               font-weight="500"
+              class="dark:fill-slate-100"
             >
               {{ m.id }}
             </text>
@@ -312,20 +337,20 @@ const markers = computed(() =>
 
           <g v-if="hovered" pointer-events="none">
             <rect
-              :x="Math.min(hovered.px + 40, 510)"
-              :y="Math.max(hovered.py - 56, 8)"
-              width="180"
-              height="86"
+              :x="Math.min(hovered.px + 24, 510)"
+              :y="Math.max(hovered.py - 36, 8)"
+              width="160"
+              height="72"
               rx="4"
               fill="white"
               stroke="#1e40af"
-              stroke-width="1"
+              stroke-width="0.7"
               filter="drop-shadow(0 2px 4px rgba(0,0,0,0.15))"
             />
             <text
-              :x="Math.min(hovered.px + 48, 518)"
-              :y="Math.max(hovered.py - 38, 26)"
-              font-size="11"
+              :x="Math.min(hovered.px + 30, 516)"
+              :y="Math.max(hovered.py - 22, 24)"
+              font-size="9"
               font-family="JetBrains Mono, monospace"
               fill="#1e40af"
               font-weight="bold"
@@ -333,27 +358,27 @@ const markers = computed(() =>
               {{ hovered.id }} · {{ hovered.model }}
             </text>
             <text
-              :x="Math.min(hovered.px + 48, 518)"
-              :y="Math.max(hovered.py - 22, 42)"
-              font-size="10"
+              :x="Math.min(hovered.px + 30, 516)"
+              :y="Math.max(hovered.py - 10, 38)"
+              font-size="8"
               font-family="JetBrains Mono, monospace"
               :fill="hovered.stroke"
             >
               ● {{ hovered.status }}
             </text>
             <text
-              :x="Math.min(hovered.px + 48, 518)"
-              :y="Math.max(hovered.py - 8, 56)"
-              font-size="10"
+              :x="Math.min(hovered.px + 30, 516)"
+              :y="Math.max(hovered.py + 2, 50)"
+              font-size="8"
               font-family="JetBrains Mono, monospace"
               fill="#64748b"
             >
               battery {{ hovered.battery }}%
             </text>
             <text
-              :x="Math.min(hovered.px + 48, 518)"
-              :y="Math.max(hovered.py + 6, 70)"
-              font-size="10"
+              :x="Math.min(hovered.px + 30, 516)"
+              :y="Math.max(hovered.py + 14, 62)"
+              font-size="8"
               font-family="JetBrains Mono, monospace"
               fill="#64748b"
             >
@@ -363,7 +388,6 @@ const markers = computed(() =>
           </g><!-- /zoomTransform -->
         </svg>
 
-        <!-- Zoom controls overlay -->
         <div class="absolute right-3 top-3 flex flex-col overflow-hidden rounded border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
           <button
             class="grid h-8 w-8 place-items-center border-b border-slate-100 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -381,7 +405,7 @@ const markers = computed(() =>
           </button>
           <button
             class="grid h-8 w-8 place-items-center border-b border-slate-100 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
-            title="Reset zoom (1:1)"
+            title="Reset zoom and pan (1:1)"
             @click="zoomReset"
           >
             <span class="text-[9px] font-semibold">1:1</span>
@@ -396,7 +420,7 @@ const markers = computed(() =>
         </div>
 
         <div class="pointer-events-none absolute bottom-2 right-3 rounded bg-white/85 px-2 py-0.5 text-[10px] font-mono text-slate-500 shadow dark:bg-slate-900/85 dark:text-slate-400">
-          zoom {{ Math.round(zoom * 100) }}%
+          zoom {{ Math.round(zoom * 100) }}% · drag to pan
         </div>
       </div>
     </NCard>
@@ -404,7 +428,7 @@ const markers = computed(() =>
     <NCard :title="selected ? selected.id : 'Robot details'" size="small" class="!bg-white dark:!bg-slate-900">
       <div v-if="!selected" class="text-sm text-slate-500">Click a robot to see full details.</div>
       <div v-else class="flex flex-col gap-3 text-sm">
-        <div class="grid place-items-center rounded bg-slate-100 py-3">
+        <div class="grid place-items-center rounded bg-slate-100 py-3 dark:bg-slate-800">
           <img
             :src="previewSpriteFor(selected)"
             :alt="selected.id"
@@ -420,12 +444,12 @@ const markers = computed(() =>
         <div class="flex justify-between"><span class="text-slate-500">Battery</span><span class="font-mono">{{ selected.battery }}%</span></div>
         <div class="flex justify-between"><span class="text-slate-500">Position</span><span class="font-mono text-xs">{{ selected.x.toFixed(2) }}, {{ selected.y.toFixed(2) }} m</span></div>
         <div class="flex justify-between"><span class="text-slate-500">Heading</span><span class="font-mono text-xs">{{ ((selected.theta * 180) / Math.PI).toFixed(1) }}°</span></div>
-        <div class="flex justify-between"><span class="text-slate-500">Mission</span><span class="font-mono text-xs">{{ selected.mission || '—' }}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Mission</span><span class="font-mono text-xs">{{ selected.mission || '-' }}</span></div>
         <div class="flex justify-between"><span class="text-slate-500">Uptime</span><span class="font-mono text-xs">{{ selected.uptime }}</span></div>
         <div class="mt-3 flex gap-2">
-          <button class="flex-1 rounded bg-slate-100 px-3 py-2 text-xs hover:bg-slate-200">Pause</button>
-          <button class="flex-1 rounded bg-red-100 px-3 py-2 text-xs text-red-800 hover:bg-red-200">Stop</button>
-          <button class="flex-1 rounded bg-brand-100 px-3 py-2 text-xs text-brand-800 hover:bg-brand-200">Home</button>
+          <button class="flex-1 rounded bg-slate-100 px-3 py-2 text-xs hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Pause</button>
+          <button class="flex-1 rounded bg-red-100 px-3 py-2 text-xs text-red-800 hover:bg-red-200 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900">Stop</button>
+          <button class="flex-1 rounded bg-brand-100 px-3 py-2 text-xs text-brand-800 hover:bg-brand-200 dark:bg-brand-950 dark:text-brand-200 dark:hover:bg-brand-900">Home</button>
         </div>
       </div>
     </NCard>
