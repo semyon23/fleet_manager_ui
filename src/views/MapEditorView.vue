@@ -298,7 +298,7 @@ function handleCalibrateClick(u, v) {
   tool.value = 'select'
 }
 
-// Точный порядок и deep-clone взяты из эталона vda5050_lif_editor
+// Точный порядок и deep-clone взяты из эталонного lif_editor
 // (layout.controller.ts createNode:376): сначала nodes[id], потом layouts.nodes[id].
 // JSON.parse(JSON.stringify(...)) даёт plain object без Vue-proxy, чтобы
 // v-network-graph гарантированно перевычислил normal.color для новой ноды.
@@ -756,10 +756,10 @@ const fileMenu = [
   { label: 'Save', key: 'save' },
   { label: 'Preview JSON', key: 'preview' },
   { type: 'divider' },
-  { label: 'Import VDA5050 LIF…', key: 'import-lif' },
+  { label: 'Import LIF…', key: 'import-lif' },
   { type: 'divider' },
   { label: 'Export Nav2 GeoJSON', key: 'export-geo' },
-  { label: 'Export VDA5050 LIF (this map)', key: 'export-lif' },
+  { label: 'Export LIF (this map)', key: 'export-lif' },
   { label: 'Export multi-layout LIF (all maps)', key: 'export-lif-multi' },
   { type: 'divider' },
   { label: '← Back to Maps', key: 'back' },
@@ -815,7 +815,7 @@ function onHelpMenu(k) {
   if (k === 'shortcuts') showHelp.value = true
   else if (k === 'tour') tour?.startTour()
   else if (k === 'docs') msg.info('See docs/ folder in repo')
-  else if (k === 'about') msg.info('Fleet Manager · Map Editor · VDA5050 LIF + Nav2 GeoJSON')
+  else if (k === 'about') msg.info('Fleet Manager · Map Editor · LIF + Nav2 GeoJSON')
 }
 
 // === Left sidebar lists ===
@@ -907,7 +907,7 @@ const connectedNodes = computed(() => {
   return [...set]
 })
 
-// === VDA5050 Actions на ноде ===
+// === Actions на ноде ===
 function makeAction() {
   return {
     actionId: 'a-' + Math.random().toString(36).slice(2, 8),
@@ -1551,7 +1551,7 @@ const TOOLS = [
               </div>
               <div>
                 <div class="mb-1 text-xs text-slate-500">
-                  VDA5050 Actions ({{ (selectedWaypoint.actions || []).length }})
+                  Actions ({{ (selectedWaypoint.actions || []).length }})
                 </div>
                 <div class="space-y-2">
                   <div
@@ -1700,7 +1700,7 @@ const TOOLS = [
           </div>
           <pre class="max-h-[60vh] overflow-auto rounded bg-slate-900 p-4 font-mono text-[11px] leading-relaxed text-emerald-200">{{ previewGeoJson }}</pre>
         </NTabPane>
-        <NTabPane name="lif" tab="VDA5050 LIF 1.0.0">
+        <NTabPane name="lif" tab="LIF 1.0.0">
           <div class="mb-2 flex justify-end gap-2">
             <NButton size="tiny" @click="copyToClipboard(previewLif, 'LIF')">Copy</NButton>
             <NButton size="tiny" type="primary" @click="doExportLif">Download</NButton>

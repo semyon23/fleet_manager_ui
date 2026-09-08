@@ -24,7 +24,7 @@ const nav = [
       </div>
       <div class="flex flex-col">
         <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Fleet Manager</span>
-        <span class="text-[10px] font-mono text-slate-500 dark:text-slate-400">VDA5050 · v0.1</span>
+        <span class="text-[10px] font-mono text-slate-500 dark:text-slate-400">v0.1</span>
       </div>
     </div>
     <nav class="flex flex-1 flex-col gap-0.5 p-2" data-tour="sidebar-nav">
@@ -45,7 +45,7 @@ const nav = [
         <span class="inline-block h-2 w-2 rounded-full" :style="{ backgroundColor: health.color.value }"></span>
         <span class="text-slate-600 dark:text-slate-300">{{ health.label.value }}</span>
       </div>
-      <div>MQTT · VDA5050 1.6</div>
+      <div>MQTT</div>
     </div>
   </aside>
 </template>

@@ -201,7 +201,7 @@ const columns = [
     <NDataTable v-else :columns="columns" :data="missions" :bordered="false" size="small" />
 
     <div class="mt-4 rounded bg-slate-50 dark:bg-slate-800 p-3 text-xs text-slate-600 dark:text-slate-400">
-      Missions are dispatched by the backend via VDA5050 Order messages. The list refreshes every 3s from
+      Missions are dispatched by the backend to the robots. The list refreshes every 3s from
       <code>GET /api/fms/missions</code>. Cancel calls <code>POST /api/fms/missions/:id/cancel</code>.
     </div>
 
@@ -291,7 +291,7 @@ const columns = [
 
           <div class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
             Actions attached to each waypoint in the Map Editor travel with the mission automatically —
-            the backend converts steps + actions into a VDA5050 Order.
+            the backend converts steps + actions into a robot order.
           </div>
         </div>
 

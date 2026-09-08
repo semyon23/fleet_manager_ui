@@ -42,7 +42,7 @@ export function useOnboardingTour(router) {
       element: '[data-tour="sidebar-nav"]',
       popover: {
         title: '👋 Hi!',
-        description: 'This is Fleet Manager — a dashboard to manage a fleet of AGV/AMR robots based on the VDA5050 standard. On the left are 8 sections — we\'ll go through each.',
+        description: 'This is Fleet Manager — a dashboard to manage a fleet of AGV/AMR robots. On the left are 8 sections — we\'ll go through each.',
         side: 'right',
         align: 'center',
       },
@@ -84,7 +84,7 @@ export function useOnboardingTour(router) {
       element: '.editor-root',
       popover: {
         title: 'Map Editor',
-        description: 'Draw robot routes here: points (nodes), links (edges), charge/parking stations. Export to VDA5050 LIF and Nav2 GeoJSON.',
+        description: 'Draw robot routes here: points (nodes), links (edges), charge/parking stations. Export to LIF and Nav2 GeoJSON.',
         side: 'top',
         align: 'center',
       },
@@ -156,7 +156,7 @@ export function useOnboardingTour(router) {
       element: '[data-tour="preview-json"]',
       popover: {
         title: 'Preview JSON',
-        description: 'View the current map in two formats: Nav2 GeoJSON and VDA5050 LIF. Plus a Validate tab — orphan edges, duplicates, isolated points.',
+        description: 'View the current map in two formats: Nav2 GeoJSON and LIF. Plus a Validate tab — orphan edges, duplicates, isolated points.',
         side: 'bottom',
       },
     },
