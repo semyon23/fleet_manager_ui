@@ -39,10 +39,10 @@ export const useRobotsStore = defineStore('robots', () => {
 
   // === Глобальный polling: GET /fms/robots ===
   // Запускается один раз из App.vue.onMounted, доступен во всех views.
-  // Частота 10 сек: этот эндпоинт нужен только для страницы Robots (таблица).
+  // Частота 5 сек: этот эндпоинт нужен только для страницы Robots (таблица).
   // Live Map перейдёт на WebSocket-стрим позиций как только Семён поднимет /ws.
-  // (Согласовано с ним 2026-09-08.)
-  const POLL_MS = 10000
+  // (Согласовано с ним 2026-09-08: сначала 10с, потом попросил 5с.)
+  const POLL_MS = 5000
   const pollingActive = ref(false)
   const lastPollAt = ref(null)
   const lastPollError = ref(null)
