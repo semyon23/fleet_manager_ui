@@ -17,16 +17,29 @@ const LS_REFRESH_KEY = 'fm.auth.refreshToken'
 const LS_MOCK_KEY = 'fm.api.useMocks'
 
 // === Config ===
+// Runtime-config через public/config.js: файл лежит в dist/ и подключается
+// в index.html ПЕРЕД bundle. Позволяет Семёну и на любом деплое поменять
+// адрес бэка / mock-режим без пересборки — просто отредактировать один
+// файл рядом с index.html. Приоритет: runtime > env > default.
+function runtimeCfg() {
+  return (typeof window !== 'undefined' && window.__FLEET_CONFIG__) || {}
+}
+
 export function getBaseUrl() {
+  const rt = runtimeCfg().apiBaseUrl
+  if (rt && String(rt).trim()) return String(rt).trim()
   return import.meta.env.VITE_API_BASE_URL || '/api'
 }
 
 // === Mock mode ===
-// Приоритет: localStorage (можно менять из UI) → env-переменная → default true (пока бэка нет)
+// Приоритет: localStorage (можно менять из UI) → runtime config → env → default true (пока бэка нет)
 export function getMockMode() {
   const ls = localStorage.getItem(LS_MOCK_KEY)
   if (ls === '1' || ls === 'true') return true
   if (ls === '0' || ls === 'false') return false
+  const rt = runtimeCfg().useMocks
+  if (rt === true) return true
+  if (rt === false) return false
   const envVal = import.meta.env.VITE_USE_MOCKS
   if (envVal === 'false' || envVal === '0') return false
   return true  // default пока Семён не поднял бэк

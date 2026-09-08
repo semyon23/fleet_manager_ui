@@ -5,6 +5,8 @@
     <link rel="icon" type="image/svg+xml" href="/fleet-manager/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fleet Manager</title>
+    <!-- Runtime-конфиг: правится в dist/config.js без пересборки. Должен грузиться ДО bundle. -->
+    <script src="%BASE_URL%config.js"></script>
     <script>
       // GitHub Pages SPA fallback restore — decodes ?/path/... back to /path/...
       ;(function (l) {
