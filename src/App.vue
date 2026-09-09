@@ -8,6 +8,7 @@ import { useOnboardingTour } from './composables/useOnboardingTour'
 import { useRobotsStore } from './stores/robots'
 import { useTheme } from './composables/useTheme'
 import { useBackendHealth } from './composables/useBackendHealth'
+import { useTelemetryWs } from './composables/useTelemetryWs'
 
 const router = useRouter()
 const tour = useOnboardingTour(router)
@@ -18,18 +19,23 @@ const robots = useRobotsStore()
 const { isDark } = useTheme()
 const naiveTheme = computed(() => (isDark.value ? darkTheme : null))
 const health = useBackendHealth()
+const telemetry = useTelemetryWs()
 
 onMounted(() => {
   tour.startIfFirstVisit()
-  // Глобальный polling GET /fms/robots каждую секунду — таблица, Dashboard,
-  // LiveMap и т.д. видят одни и те же живые данные.
+  // Глобальный polling GET /fms/robots — раз в 5с, только для таблицы Robots.
+  // Live Map получает координаты быстрее через WS-стрим (см. ниже).
   robots.startPolling()
-  // Health-ping /api/health каждые 3 сек — топбар/sidebar показывают индикатор.
+  // Health-ping /api/health каждые 3 сек — sidebar footer показывает индикатор.
   health.startPing()
+  // WebSocket телеметрия от Семёна: {type:"state", robot_id, data:{x,y,theta,battery,status}}.
+  // В mock-режиме connect() ничего не делает. Авто-reconnect с backoff.
+  telemetry.connect()
 })
 onBeforeUnmount(() => {
   robots.stopPolling()
   health.stopPing()
+  telemetry.disconnect()
 })
 </script>
 

@@ -136,6 +136,12 @@ const columns = [
   },
 ]
 
+// Высота таблицы: подобрана так, чтобы верх (header топбара + отступы +
+// заголовок карточки) вычитался из вьюпорта. Внутри NDataTable будет sticky
+// header, tbody скроллится. Живёт как computed на случай если позже
+// поменяется структура (напр. появится хлебный ряд).
+const tableMaxHeight = 'calc(100vh - 14rem)'
+
 // === Register robot modal ===
 const showRegister = ref(false)
 const submitting = ref(false)
@@ -201,7 +207,7 @@ async function submitRegister() {
         />
         <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span :class="store.pollingActive ? 'inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse' : 'inline-block h-2 w-2 rounded-full bg-slate-400'"></span>
-          <span>Live (1s)</span>
+          <span>Live (5s)</span>
           <NSwitch :value="store.pollingActive" size="small" @update:value="toggleLive" />
         </div>
         <span v-if="store.lastPollError" class="text-xs text-rose-600 font-mono" :title="store.lastPollError">poll error</span>
@@ -217,11 +223,16 @@ async function submitRegister() {
         </template>
       </NEmpty>
     </div>
+    <!-- Скролл держим ВНУТРИ карточки, чтобы sidebar/topbar не уезжали
+         при большом парке. max-height задаём CSS-переменной от viewport,
+         NDataTable внутри делает sticky-хедер + скролл tbody.
+         Правка по Семёну 2026-09-08. -->
     <NDataTable
       v-else
       :columns="columns"
       :data="filteredRobots"
       :bordered="false"
+      :max-height="tableMaxHeight"
       :row-props="(row) => ({ style: 'cursor: pointer', onClick: () => openDrawer(row.id) })"
     />
     <div v-if="store.robots.length && filteredRobots.length === 0" class="mt-3 text-center text-xs text-slate-500">

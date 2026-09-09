@@ -92,6 +92,23 @@ export const useRobotsStore = defineStore('robots', () => {
     robots.value = robots.value.filter((r) => r.id !== id)
   }
 
+  // Патч от WS-стрима телеметрии (useTelemetryWs). Только для уже известных
+  // роботов — если робота нет в списке, ждём HTTP-poll его подтянет.
+  // Не меняем sprites/model/mission/uptime — это метаданные, не телеметрия.
+  function applyTelemetry(robotId, patch) {
+    const idx = robots.value.findIndex((r) => r.id === robotId)
+    if (idx === -1) return
+    const cur = robots.value[idx]
+    robots.value[idx] = {
+      ...cur,
+      x: patch.x ?? cur.x,
+      y: patch.y ?? cur.y,
+      theta: patch.theta ?? cur.theta,
+      battery: patch.battery ?? cur.battery,
+      status: patch.status ?? cur.status,
+    }
+  }
+
   // Замерджить свежий список с бэка (GET /fms/robots). Известным роботам
   // сохраняем sprites — их бэк не отдаёт, это фронтовое поле.
   function mergeRobots(freshList) {
@@ -104,7 +121,7 @@ export const useRobotsStore = defineStore('robots', () => {
 
   return {
     robots, counts, totalBattery,
-    addRobot, mergeRobots, removeRobot,
+    addRobot, mergeRobots, removeRobot, applyTelemetry,
     pollingActive, lastPollAt, lastPollError,
     startPolling, stopPolling,
   }
