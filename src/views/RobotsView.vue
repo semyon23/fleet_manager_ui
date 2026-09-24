@@ -8,6 +8,7 @@ import {
 import { h } from 'vue'
 import { previewSpriteFor, tintStyle } from '../lib/robotSprite'
 import * as api from '../api'
+import { subscribeRobot, unsubscribeRobot } from '../composables/useRobotMqtt'
 
 const store = useRobotsStore()
 const msg = useMessage()
@@ -70,6 +71,7 @@ async function deleteRobot(id) {
   try {
     await api.robots.deleteRobot(id)
     store.removeRobot(id)
+    unsubscribeRobot(id)
     if (selectedId.value === id) { selectedId.value = null; showDrawer.value = false }
     msg.success(`Robot "${id}" deleted`)
   } catch (e) {
@@ -174,12 +176,16 @@ async function submitRegister() {
   submitting.value = true
   const name = form.value.name.trim()
   try {
+    const manufacturer = form.value.manufacturer.trim()
     const resp = await api.robots.registerRobot({
       name,
-      manufacturer: form.value.manufacturer.trim(),
+      manufacturer,
       amr_class: form.value.amr_class,
     })
-    store.addRobot({ ...form.value, name })
+    store.addRobot({ ...form.value, name, manufacturer })
+    // Бэк подтвердил регистрацию → подписываемся на MQTT-топики робота
+    // (uagv/v2/<manufacturer>/<name>/visualization|connection).
+    subscribeRobot(resp.robot_id || name, manufacturer)
     msg.success(api.getMockMode()
       ? `Robot "${resp.robot_id}" registered (mock)`
       : `Robot "${resp.robot_id}" registered`)

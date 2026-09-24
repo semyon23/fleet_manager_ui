@@ -18,6 +18,11 @@
  *                 Пример: "ws://192.168.0.111:5000". Пустая строка =
  *                 автоматически вычислить из apiBaseUrl (заменить http->ws, убрать /api).
  *
+ *   - mqttUrl:    адрес WebSocket-listener Mosquitto. Пример: "ws://192.168.0.105:9001".
+ *                 Пустая строка = MQTT выключен (позиции только из wsUrl).
+ *   - mqttUser / mqttPassword: пользователь брокера с правами только на чтение
+ *                 (fleet-ui, см. docs/MOSQUITTO_SETUP.md).
+ *
  * Мини-туториал для Семёна:
  *   1. Открой этот файл в блокноте
  *   2. В apiBaseUrl впиши свой URL, например "http://192.168.0.111:5000/api"
@@ -29,4 +34,7 @@ window.__FLEET_CONFIG__ = {
   apiBaseUrl: '',
   useMocks: null,
   wsUrl: '',
+  mqttUrl: '',
+  mqttUser: '',
+  mqttPassword: '',
 };

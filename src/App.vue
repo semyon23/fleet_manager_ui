@@ -9,6 +9,7 @@ import { useRobotsStore } from './stores/robots'
 import { useTheme } from './composables/useTheme'
 import { useBackendHealth } from './composables/useBackendHealth'
 import { useTelemetryWs } from './composables/useTelemetryWs'
+import { useRobotMqtt } from './composables/useRobotMqtt'
 
 const router = useRouter()
 const tour = useOnboardingTour(router)
@@ -20,6 +21,7 @@ const { isDark } = useTheme()
 const naiveTheme = computed(() => (isDark.value ? darkTheme : null))
 const health = useBackendHealth()
 const telemetry = useTelemetryWs()
+const robotMqtt = useRobotMqtt()
 
 onMounted(() => {
   tour.startIfFirstVisit()
@@ -31,11 +33,16 @@ onMounted(() => {
   // WebSocket телеметрия от Семёна: {type:"state", robot_id, data:{x,y,theta,battery,status}}.
   // В mock-режиме connect() ничего не делает. Авто-reconnect с backoff.
   telemetry.connect()
+  // MQTT over WS (Mosquitto): позиции + online/offline. Подписки на роботов
+  // оформляются после успешной регистрации (RobotsView) и по poll после F5.
+  // Пустой mqttUrl в config.js или mock-режим → выключено.
+  robotMqtt.connect()
 })
 onBeforeUnmount(() => {
   robots.stopPolling()
   health.stopPing()
   telemetry.disconnect()
+  robotMqtt.disconnect()
 })
 </script>
 

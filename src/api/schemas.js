@@ -180,6 +180,8 @@ export function wireToRobot(w) {
   return {
     id: w.name,
     model: modelParts.join(' · ') || '—',
+    // Нужен для MQTT-топика uagv/v2/<manufacturer>/<serial>/... (useRobotMqtt)
+    manufacturer: w.status?.hardware_version?.manufacturer || '',
     status,
     battery: Math.round(w.status.battery_level ?? 0),
     x: w.status.pose?.x ?? 0,

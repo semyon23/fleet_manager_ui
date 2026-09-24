@@ -54,6 +54,9 @@ export const useRobotsStore = defineStore('robots', () => {
     try {
       const fresh = await api.robots.listRobots()
       mergeRobots(fresh)
+      // После F5 MQTT-подписки пустые — восстанавливаем по списку с бэка.
+      const { syncRobots } = await import('../composables/useRobotMqtt')
+      syncRobots(fresh)
       lastPollAt.value = new Date()
       lastPollError.value = null
     } catch (e) {
@@ -78,6 +81,7 @@ export const useRobotsStore = defineStore('robots', () => {
   function addRobot({ name, manufacturer, amr_class }) {
     robots.value.push({
       id: name,
+      manufacturer: manufacturer || '',
       model: manufacturer ? `${manufacturer} · ${amr_class}` : amr_class,
       sprites: AMR_SPRITES,
       status: 'offline',
