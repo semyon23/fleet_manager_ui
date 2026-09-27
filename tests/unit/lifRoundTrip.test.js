@@ -38,7 +38,7 @@ describe('exportLif — VDA5050 Order-совместимая структура'
   it('корневая структура: metaInformation + layouts[1]', () => {
     const lif = exportLif(makeMap())
     expect(lif.metaInformation.lifVersion).toBe('1.0.0')
-    expect(lif.metaInformation.vda5050Version).toBe('2.0.0')
+    expect(lif.metaInformation.vda5050Version).toBe('3.0.0')
     expect(lif.layouts.length).toBe(1)
   })
 
@@ -51,17 +51,21 @@ describe('exportLif — VDA5050 Order-совместимая структура'
     expect(n.actions).toEqual([])
     expect(n.nodePosition.x).toBeDefined()
     expect(n.nodePosition.y).toBeDefined()
-    expect(n.nodePosition.theta).toBe(0)
+    // theta не задана — поля нет: "любая ориентация", а не "ориентация 0"
+    expect(n.nodePosition).not.toHaveProperty('theta')
     expect(n.nodePosition.mapId).toBe('map-1')
   })
 
-  it('edge содержит orientationType/direction/actions', () => {
+  it('edge: обязательные поля, необязательные только если заданы', () => {
     const lif = exportLif(makeMap())
     const e = lif.layouts[0].edges[0]
     expect(e.sequenceId).toBe(3)  // (i+1)*2+1 = нечётные
     expect(e.released).toBe(true)
-    expect(e.orientationType).toBe('TANGENTIAL')
-    expect(e.direction).toBe('FORWARD')
+    expect(e).not.toHaveProperty('orientation')
+    expect(e).not.toHaveProperty('orientationType')
+    expect(e).not.toHaveProperty('direction')
+    expect(e.maximumSpeed).toBe(1.0)
+    expect(e.length).toBeCloseTo(Math.hypot(100, 50) * 0.05, 4)
     expect(e.actions).toEqual([])
     expect(e.startNodeId).toBe('n001')
     expect(e.endNodeId).toBe('n002')

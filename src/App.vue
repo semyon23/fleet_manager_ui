@@ -1,20 +1,13 @@
 <script setup>
 import { NConfigProvider, NMessageProvider, darkTheme } from 'naive-ui'
-import { useRouter } from 'vue-router'
-import { onMounted, onBeforeUnmount, provide, computed } from 'vue'
+import { onMounted, onBeforeUnmount, computed } from 'vue'
 import AppSidebar from './components/AppSidebar.vue'
 import AppTopbar from './components/AppTopbar.vue'
-import { useOnboardingTour } from './composables/useOnboardingTour'
 import { useRobotsStore } from './stores/robots'
 import { useTheme } from './composables/useTheme'
 import { useBackendHealth } from './composables/useBackendHealth'
 import { useTelemetryWs } from './composables/useTelemetryWs'
 import { useRobotMqtt } from './composables/useRobotMqtt'
-
-const router = useRouter()
-const tour = useOnboardingTour(router)
-// Прокидываем в глубину чтобы Topbar/Editor могли позвать startTour()
-provide('tour', tour)
 
 const robots = useRobotsStore()
 const { isDark } = useTheme()
@@ -24,7 +17,6 @@ const telemetry = useTelemetryWs()
 const robotMqtt = useRobotMqtt()
 
 onMounted(() => {
-  tour.startIfFirstVisit()
   // Глобальный polling GET /fms/robots — раз в 5с, только для таблицы Robots.
   // Live Map получает координаты быстрее через WS-стрим (см. ниже).
   robots.startPolling()

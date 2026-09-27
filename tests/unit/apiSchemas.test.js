@@ -111,3 +111,29 @@ describe('RobotWire → Robot mapper', () => {
     expect(r.status).toBe('idle')
   })
 })
+
+describe('MapEntity — поля VDA 5050 v3 и зоны', () => {
+  const base = {
+    id: 'm1', name: 'F1', width: 100, height: 100,
+    meta: { resolution: 0.05, origin: [0, 0, 0] },
+  }
+
+  it('сохраняет атрибуты узла/ребра и зоны', () => {
+    const m = S.MapEntity.parse({
+      ...base,
+      waypoints: [{ id: 'n1', u: 1, v: 2, name: 'n1', theta: 1.57, allowedDeviationXY: { a: 0.2, b: 0.1, theta: 0 },
+        actions: [{ actionId: 'a', actionType: 'waitForTrigger', blockingType: 'HARD', actionParameters: [{ key: 'triggerType', value: ['LOCAL'] }] }] }],
+      edges: [{ id: 'e', from: 'n1', to: 'n1', maxSpeed: 1, corridor: { leftWidth: 0.5, rightWidth: 0.5, releaseRequired: true, releaseLossBehavior: 'RETURN' } }],
+      zones: [{ id: 'z1', type: 'SPEED_LIMIT', vertices: [{ u: 0, v: 0 }, { u: 10, v: 0 }, { u: 10, v: 10 }], maximumSpeed: 0.3 }],
+    })
+    expect(m.waypoints[0].theta).toBe(1.57)
+    expect(m.waypoints[0].actions[0].actionParameters[0].value).toEqual(['LOCAL'])
+    expect(m.edges[0].corridor.releaseLossBehavior).toBe('RETURN')
+    expect(m.zones[0].maximumSpeed).toBe(0.3)
+  })
+
+  it('отклоняет зону с неизвестным типом или < 3 вершин', () => {
+    expect(() => S.MapEntity.parse({ ...base, zones: [{ id: 'z', type: 'LAVA', vertices: [{ u: 0, v: 0 }, { u: 1, v: 0 }, { u: 1, v: 1 }] }] })).toThrow()
+    expect(() => S.MapEntity.parse({ ...base, zones: [{ id: 'z', type: 'BLOCKED', vertices: [{ u: 0, v: 0 }] }] })).toThrow()
+  })
+})

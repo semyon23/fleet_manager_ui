@@ -169,7 +169,8 @@ type Map = {
   waypoints: Waypoint[]
   edges: Edge[]
   stations: Station[]
-  zones: any[]         // TBD
+  zones: Zone[]        // зоны VDA 5050 v3 (см. ниже), вершины в пикселях
+  zoneSet?: ZoneSet    // только в PATCH от редактора: те же зоны, готовые для топика zoneSet
   assignedRobots: string[]  // robot ids
   createdAt: string    // ISO
   updatedAt: string
@@ -192,6 +193,10 @@ type Waypoint = {
   description?: string
   mapId?: string
   actions?: Action[]   // VDA5050 actions
+  // --- VDA 5050 v3, nodePosition (7.3). Нет поля — не задано. Углы в мировых радианах.
+  theta?: number                                     // ориентация на узле; нет — любая
+  allowedDeviationXY?: { a: number, b: number, theta: number }  // эллипс допуска, м / рад
+  allowedDeviationTheta?: number                     // допуск по углу, рад [0..π]
 }
 
 type Edge = {
@@ -199,7 +204,55 @@ type Edge = {
   from: string  // waypoint/station id
   to: string
   cost?: number     // default 0
-  maxSpeed?: number // m/s, default 1
+  maxSpeed?: number // m/s, default 1 (= maximumSpeed ребра в order)
+  // --- VDA 5050 v3, edge (7.3). Нет поля — не задано.
+  maximumMobileRobotHeight?: number        // м, с грузом
+  minimumLoadHandlingDeviceHeight?: number // м
+  orientation?: number                     // рад
+  orientationType?: 'TANGENTIAL' | 'GLOBAL'
+  direction?: string                       // для физически line-guided: "left", "straight", ...
+  reachOrientationBeforeEntering?: boolean
+  maximumRotationSpeed?: number            // рад/с
+  corridor?: {
+    leftWidth: number, rightWidth: number  // м, лево/право по ходу from → to
+    corridorReferencePoint?: 'KINEMATIC_CENTER' | 'CONTOUR'
+    releaseRequired?: boolean
+    releaseLossBehavior?: 'STOP' | 'RETURN'  // только при releaseRequired
+  }
+  actions?: Action[]
+}
+
+// Зона карты — VDA 5050 v3, 6.4 / 7.6. Хранится в пикселях, как узлы.
+type Zone = {
+  id: string       // уникален в пределах карты: z001, z002, ...
+  type: 'BLOCKED' | 'LINE_GUIDED' | 'RELEASE' | 'COORDINATED_REPLANNING' | 'SPEED_LIMIT'
+      | 'ACTION' | 'PRIORITY' | 'PENALTY' | 'DIRECTED' | 'BIDIRECTED'
+  name?: string    // → zoneDescriptor
+  vertices: { u: number, v: number }[]   // >= 3, простой полигон
+  // Поля по типу (имена как в zoneSet):
+  maximumSpeed?: number                             // SPEED_LIMIT, м/с
+  entryActions?: ZoneAction[]; duringActions?: ZoneAction[]; exitActions?: ZoneAction[]  // ACTION
+  releaseLossBehavior?: 'STOP' | 'CONTINUE' | 'EVACUATE'  // RELEASE
+  priorityFactor?: number                           // PRIORITY, 0..1
+  penaltyFactor?: number                            // PENALTY, 0..1
+  direction?: number                                // DIRECTED / BIDIRECTED, мировые радианы
+  directedLimitation?: 'SOFT' | 'RESTRICTED' | 'STRICT'
+  bidirectedLimitation?: 'SOFT' | 'RESTRICTED'
+}
+type ZoneAction = Omit<Action, 'actionId'>  // actionId генерирует робот
+
+// Объект zoneSet (7.6) без заголовка сообщения — заголовок добавляет диспетчер.
+// Вершины в метрах, против часовой. zoneSetId = "<mapId>-zs-<хеш зон>":
+// меняется при любом изменении зон (содержимое набора с одним id менять нельзя).
+type ZoneSet = {
+  mapId: string
+  zoneSetId: string
+  zoneSetDescriptor?: string
+  zones: {
+    zoneId: string, zoneType: Zone['type'], zoneDescriptor?: string,
+    vertices: { x: number, y: number }[],
+    /* + поля по типу, как в Zone */
+  }[]
 }
 
 type Station = {
@@ -214,10 +267,11 @@ type Station = {
 
 type Action = {
   actionId: string
-  actionType: string   // 'pick' | 'drop' | 'charge' | 'wait' | ... — согласуем список
+  actionType: string   // предопределённые из VDA 5050 v3 (таблица 4: pick, drop, startCharging, ...) или свои
   blockingType: 'NONE' | 'SOFT' | 'SINGLE' | 'HARD'
   actionDescriptor?: string
-  actionParameters?: { key: string, value: string | number | boolean }[]
+  actionParameters?: { key: string, value: any }[]   // value — любой JSON (напр. triggerType: ["LOCAL"])
+  retriable?: boolean
 }
 ```
 

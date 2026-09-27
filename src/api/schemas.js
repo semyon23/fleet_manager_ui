@@ -47,6 +47,21 @@ export const MapMeta = z.object({
   negate: z.union([z.literal(0), z.literal(1)]).optional(),
   mode: z.enum(['trinary', 'scale', 'raw']).optional(),
 })
+// Action узла/ребра (VDA 5050 v3, 7.3). Значение параметра — любой JSON.
+export const MapAction = z.object({
+  actionId: z.string(),
+  actionType: z.string(),
+  blockingType: z.enum(['NONE', 'SOFT', 'SINGLE', 'HARD']),
+  actionDescriptor: z.string().optional(),
+  actionParameters: z.array(z.object({
+    key: z.string(),
+    value: z.any(),
+  })).optional().default([]),
+  retriable: z.boolean().optional(),
+})
+// Action в ACTION-зоне — без actionId (его генерирует робот)
+export const ZoneAction = MapAction.omit({ actionId: true })
+
 export const Waypoint = z.object({
   id: z.string(),
   u: z.number(),
@@ -54,16 +69,18 @@ export const Waypoint = z.object({
   name: z.string(),
   description: z.string().optional().default(''),
   mapId: z.string().optional().default(''),
-  actions: z.array(z.object({
-    actionId: z.string(),
-    actionType: z.string(),
-    blockingType: z.enum(['NONE', 'SOFT', 'SINGLE', 'HARD']),
-    actionDescriptor: z.string().optional(),
-    actionParameters: z.array(z.object({
-      key: z.string(),
-      value: z.union([z.string(), z.number(), z.boolean()]),
-    })).optional().default([]),
-  })).optional().default([]),
+  actions: z.array(MapAction).optional().default([]),
+  // Мировые радианы; нет поля — ориентация любая
+  theta: z.number().optional(),
+  allowedDeviationXY: z.object({ a: z.number(), b: z.number(), theta: z.number() }).optional(),
+  allowedDeviationTheta: z.number().optional(),
+})
+export const Corridor = z.object({
+  leftWidth: z.number().nonnegative(),
+  rightWidth: z.number().nonnegative(),
+  corridorReferencePoint: z.enum(['KINEMATIC_CENTER', 'CONTOUR']).optional(),
+  releaseRequired: z.boolean().optional(),
+  releaseLossBehavior: z.enum(['STOP', 'RETURN']).optional(),
 })
 export const Edge = z.object({
   id: z.string(),
@@ -71,6 +88,36 @@ export const Edge = z.object({
   to: z.string(),
   cost: z.number().nonnegative().default(0),
   maxSpeed: z.number().positive().default(1),
+  maximumMobileRobotHeight: z.number().nonnegative().optional(),
+  minimumLoadHandlingDeviceHeight: z.number().nonnegative().optional(),
+  orientation: z.number().optional(),
+  orientationType: z.enum(['GLOBAL', 'TANGENTIAL']).optional(),
+  direction: z.string().optional(),
+  reachOrientationBeforeEntering: z.boolean().optional(),
+  maximumRotationSpeed: z.number().nonnegative().optional(),
+  corridor: Corridor.optional(),
+  actions: z.array(MapAction).optional().default([]),
+})
+// Зона карты (VDA 5050 v3, 6.4). Вершины в пикселях карты, углы — мировые радианы.
+// Поля типа (maximumSpeed, direction, ...) — см. lib/vda5050.js ZONE_TYPES.
+export const Zone = z.object({
+  id: z.string(),
+  type: z.enum([
+    'BLOCKED', 'LINE_GUIDED', 'RELEASE', 'COORDINATED_REPLANNING', 'SPEED_LIMIT',
+    'ACTION', 'PRIORITY', 'PENALTY', 'DIRECTED', 'BIDIRECTED',
+  ]),
+  name: z.string().optional().default(''),
+  vertices: z.array(z.object({ u: z.number(), v: z.number() })).min(3),
+  maximumSpeed: z.number().optional(),
+  entryActions: z.array(ZoneAction).optional(),
+  duringActions: z.array(ZoneAction).optional(),
+  exitActions: z.array(ZoneAction).optional(),
+  releaseLossBehavior: z.enum(['STOP', 'CONTINUE', 'EVACUATE']).optional(),
+  priorityFactor: z.number().min(0).max(1).optional(),
+  penaltyFactor: z.number().min(0).max(1).optional(),
+  direction: z.number().optional(),
+  directedLimitation: z.enum(['SOFT', 'RESTRICTED', 'STRICT']).optional(),
+  bidirectedLimitation: z.enum(['SOFT', 'RESTRICTED']).optional(),
 })
 export const Station = z.object({
   id: z.string(),
@@ -91,7 +138,7 @@ export const MapEntity = z.object({
   waypoints: z.array(Waypoint).default([]),
   edges: z.array(Edge).default([]),
   stations: z.array(Station).default([]),
-  zones: z.array(z.any()).default([]),
+  zones: z.array(Zone).default([]),
   assignedRobots: z.array(z.string()).default([]),
   createdAt: IsoDateTime.optional(),
   updatedAt: IsoDateTime.optional(),

@@ -39,6 +39,6 @@ Deploys automatically to GitHub Pages on push to `main`.
 | `/map-editor` | Layout editor with VDA5050 LIF export |
 | `/robots` | Fleet table + per-robot control |
 | `/missions` | Read-only mission telemetry |
-| `/alerts` | Read-only alert stream |
+| `/alarms` | Alarms: filters, acknowledge (old `/alerts` redirects here) |
 | `/teleop` | Manual joystick control |
 | `/settings` | Backend connection, users, general |

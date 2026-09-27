@@ -5,6 +5,7 @@ import { NCard, NTag, NSelect, NSwitch } from 'naive-ui'
 import { ref, computed, watchEffect } from 'vue'
 import { spriteFor, previewSpriteFor, tintStyle } from '../lib/robotSprite'
 import { stationKindMeta } from '../lib/theme'
+import { zoneTypeMeta } from '../lib/vda5050'
 
 const robots = useRobotsStore()
 const maps = useMapsStore()
@@ -45,6 +46,25 @@ const filteredRobots = computed(() => {
 })
 
 const showRoutes = ref(true)
+const showZones = ref(true)
+
+// Зоны карты из редактора: полупрозрачные полигоны под маршрутами, только для просмотра
+const zones = computed(() => {
+  if (!showZones.value || !activeMap.value?.zones?.length) return []
+  return activeMap.value.zones
+    .filter((z) => (z.vertices || []).length >= 3)
+    .map((z) => {
+      const meta = zoneTypeMeta(z.type)
+      return {
+        id: z.id,
+        color: meta.color,
+        label: z.name || meta.label,
+        points: z.vertices.map((p) => `${PADDING + p.u},${PADDING + p.v}`).join(' '),
+        cx: PADDING + z.vertices.reduce((a, p) => a + p.u, 0) / z.vertices.length,
+        cy: PADDING + z.vertices.reduce((a, p) => a + p.v, 0) / z.vertices.length,
+      }
+    })
+})
 
 const ZOOM_MIN = 0.25
 const ZOOM_MAX = 5
@@ -124,21 +144,44 @@ const waypoints = computed(() => {
   }))
 })
 
-const edges = computed(() => {
+// Маршруты рисуем как дороги (Семён 2026-09-26: "не точки с палками").
+// Пара рёбер A→B и B→A — одна двусторонняя дорога с пунктирной осевой,
+// одно ребро — односторонняя, с шевронами по ходу движения.
+const ROAD_WIDTH = 7        // ширина полотна в пикселях карты
+const CHEVRON_STEP = 28     // шаг шевронов на односторонней дороге
+const roads = computed(() => {
   if (!showRoutes.value || !activeMap.value?.edges?.length) return []
-  const byId = new Map(activeMap.value.waypoints.map((w) => [w.id, w]))
-  const out = []
-  for (const e of activeMap.value.edges) {
+  const m = activeMap.value
+  // Рёбра могут идти и к станциям, не только к waypoints
+  const byId = new Map([...(m.waypoints || []), ...(m.stations || [])].map((n) => [n.id, n]))
+  const pairs = new Map()
+  for (const e of m.edges) {
     const a = byId.get(e.from)
     const b = byId.get(e.to)
-    if (!a || !b) continue
-    out.push({
-      id: e.id,
-      x1: PADDING + a.u, y1: PADDING + a.v,
-      x2: PADDING + b.u, y2: PADDING + b.v,
-    })
+    if (!a || !b || a === b) continue
+    const key = e.from < e.to ? `${e.from}|${e.to}` : `${e.to}|${e.from}`
+    const cur = pairs.get(key)
+    if (cur) { cur.twoWay = cur.twoWay || cur.from !== e.from; continue }
+    pairs.set(key, { key, from: e.from, a, b, twoWay: false })
   }
-  return out
+  return [...pairs.values()].map(({ key, a, b, twoWay }) => {
+    const x1 = PADDING + a.u
+    const y1 = PADDING + a.v
+    const x2 = PADDING + b.u
+    const y2 = PADDING + b.v
+    const len = Math.hypot(x2 - x1, y2 - y1)
+    const deg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI
+    // Шевроны равномерно по длине, не ближе 8 px к узлам
+    const chevrons = []
+    if (!twoWay && len > 16) {
+      const n = Math.max(1, Math.floor((len - 16) / CHEVRON_STEP))
+      for (let i = 1; i <= n; i++) {
+        const t = i / (n + 1)
+        chevrons.push({ x: x1 + (x2 - x1) * t, y: y1 + (y2 - y1) * t })
+      }
+    }
+    return { id: key, d: `M ${x1} ${y1} L ${x2} ${y2}`, twoWay, deg, chevrons }
+  })
 })
 
 const markers = computed(() =>
@@ -174,6 +217,10 @@ const markers = computed(() =>
         </div>
       </template>
       <template #header-extra>
+        <label class="mr-4 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          Show zones
+          <NSwitch v-model:value="showZones" size="small" />
+        </label>
         <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           Show routes
           <NSwitch v-model:value="showRoutes" size="small" />
@@ -241,17 +288,39 @@ const markers = computed(() =>
             <text x="460" y="425" font-size="11" fill="#92400e" font-family="monospace">LOADING</text>
           </template>
 
-          <g v-if="showRoutes" stroke="#1e40af" stroke-opacity="0.45" stroke-width="1" fill="none">
-            <line v-for="e in edges" :key="e.id"
-                  :x1="e.x1" :y1="e.y1" :x2="e.x2" :y2="e.y2" stroke-linecap="round" />
+          <g v-if="zones.length">
+            <g v-for="z in zones" :key="z.id">
+              <polygon :points="z.points" :fill="z.color" fill-opacity="0.15" :stroke="z.color" stroke-opacity="0.8" stroke-width="1" />
+              <text :x="z.cx" :y="z.cy" text-anchor="middle" dominant-baseline="middle" font-size="7"
+                    font-family="system-ui, sans-serif" font-weight="600" :fill="z.color" opacity="0.85">{{ z.label }}</text>
+            </g>
           </g>
 
-          <!-- Waypoints уменьшены (Семён 2026-09-06): r 4→2.5, шрифт 8→7, opacity ниже -->
+          <!-- Дороги: три прохода по всем рёбрам — кромка, полотно, разметка.
+               Сначала все кромки, потом всё полотно: на перекрёстках полотно
+               перекрывает кромки соседних дорог, и сеть выглядит цельной. -->
+          <g v-if="showRoutes && roads.length" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path v-for="r in roads" :key="'edge-' + r.id" :d="r.d" :stroke-width="ROAD_WIDTH + 2"
+                  class="stroke-slate-500 dark:stroke-slate-500" />
+            <path v-for="r in roads" :key="'road-' + r.id" :d="r.d" :stroke-width="ROAD_WIDTH"
+                  class="stroke-slate-300 dark:stroke-slate-600" />
+            <path v-for="r in roads.filter((x) => x.twoWay)" :key="'mid-' + r.id" :d="r.d"
+                  stroke-width="0.6" stroke-dasharray="3 3" class="stroke-white dark:stroke-slate-300" />
+            <g class="fill-slate-600 dark:fill-slate-300" stroke="none">
+              <template v-for="r in roads" :key="'chev-' + r.id">
+                <path v-for="(c, i) in r.chevrons" :key="i"
+                      :transform="`translate(${c.x} ${c.y}) rotate(${r.deg})`"
+                      d="M -1.5 -2.5 L 1.5 0 L -1.5 2.5 L -0.5 0 Z" />
+              </template>
+            </g>
+          </g>
+
+          <!-- Вершины — маленькие точки на полотне, подписи бледные -->
           <g v-if="showRoutes">
             <g v-for="wp in waypoints" :key="wp.id" :transform="`translate(${wp.x} ${wp.y})`">
-              <circle r="2.5" fill="#1e40af" stroke="#ffffff" stroke-width="1" />
-              <text y="-5" text-anchor="middle" font-size="6" font-family="JetBrains Mono, monospace"
-                    fill="#1e3a8a" opacity="0.65">{{ wp.name }}</text>
+              <circle r="1.8" stroke-width="0.8" class="fill-white stroke-slate-500 dark:fill-slate-800 dark:stroke-slate-300" />
+              <text y="-6" text-anchor="middle" font-size="5" font-family="JetBrains Mono, monospace"
+                    class="fill-slate-600 dark:fill-slate-300" opacity="0.6">{{ wp.name }}</text>
             </g>
           </g>
 

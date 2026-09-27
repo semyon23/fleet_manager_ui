@@ -21,6 +21,8 @@ export const initialConfigs = {
     minZoomLevel: 0.1,
     maxZoomLevel: 200,
     scalingObjects: false,
+    // Двойной клик в редакторе завершает рисование зоны — зумить по нему нельзя
+    doubleClickZoomEnabled: false,
     grid: {
       visible: true,
       interval: 1,
@@ -31,7 +33,7 @@ export const initialConfigs = {
   },
   node: {
     draggable: true,
-    selectable: 3,
+    selectable: true,
     normal: {
       ...shape,
       color: (n) => n.color || WAYPOINT.color,
@@ -49,19 +51,18 @@ export const initialConfigs = {
       fontSize: 10,
       color: '#374151',
       direction: 'north',
-      margin: 8,
+      margin: 6,
       background: { visible: false },
     },
   },
   edge: {
-    selectable: 3,
+    selectable: true,
     gap: 8,
     normal: {
       width: EDGE.width,
       color: EDGE.color,
       dasharray: EDGE.dasharray,
-      animate: true,
-      animationSpeed: EDGE.animationSpeed,
+      linecap: EDGE.linecap,
     },
     hover: {
       color: EDGE.colorHover,
@@ -78,8 +79,8 @@ export const initialConfigs = {
     marker: {
       target: {
         type: 'arrow',
-        width: 5,
-        height: 5,
+        width: 4,
+        height: 4,
         margin: -1,
         offset: 0,
         units: 'strokeWidth',

@@ -1,3 +1,5 @@
+import { validateZones, validateVdaAttributes } from './vdaLayout'
+
 /**
  * Проверяет карту перед экспортом в LIF / GeoJSON.
  * Возвращает { errors: [], warnings: [] } — ошибки блокируют экспорт,
@@ -67,6 +69,12 @@ export function validateMap(map) {
   for (const e of edges) {
     if (e.maxSpeed != null && e.maxSpeed < 0) errors.push(`Edge ${e.id}: maxSpeed < 0`)
     if (e.cost != null && e.cost < 0) warnings.push(`Edge ${e.id}: cost < 0`)
+  }
+
+  // 8. Атрибуты узлов/рёбер, action и зоны — по VDA 5050 v3 (lib/vdaLayout.js)
+  for (const v of [validateVdaAttributes(map), validateZones(map)]) {
+    errors.push(...v.errors)
+    warnings.push(...v.warnings)
   }
 
   return { errors, warnings }

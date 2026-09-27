@@ -10,7 +10,7 @@ const nav = [
   { to: '/maps', label: 'Maps', icon: '✎' },
   { to: '/robots', label: 'Robots', icon: '◉' },
   { to: '/missions', label: 'Missions', icon: '≡' },
-  { to: '/alerts', label: 'Alerts', icon: '!' },
+  { to: '/alarms', label: 'Alarms', icon: '!' },
   { to: '/teleop', label: 'Teleop', icon: '⇔' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ]
@@ -27,14 +27,13 @@ const nav = [
         <span class="text-[10px] font-mono text-slate-500 dark:text-slate-400">v0.1</span>
       </div>
     </div>
-    <nav class="flex flex-1 flex-col gap-0.5 p-2" data-tour="sidebar-nav">
+    <nav class="flex flex-1 flex-col gap-0.5 p-2">
       <RouterLink
         v-for="item in nav"
         :key="item.to"
         :to="item.to"
         class="group flex items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-brand-50 hover:text-brand-800 dark:text-slate-300 dark:hover:bg-brand-950 dark:hover:text-brand-300"
         active-class="!bg-brand-800 !text-white"
-        :data-tour="'nav-' + item.to.slice(1)"
       >
         <span class="w-4 text-center font-mono text-base">{{ item.icon }}</span>
         <span>{{ item.label }}</span>

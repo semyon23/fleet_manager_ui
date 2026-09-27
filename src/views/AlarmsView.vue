@@ -13,7 +13,7 @@ async function refresh() {
     alerts.value = await api.alerts.listAlerts()
     alertsError.value = null
   } catch (e) {
-    alertsError.value = e?.message || 'Failed to load alerts'
+    alertsError.value = e?.message || 'Failed to load alarms'
   }
 }
 let timer = null
@@ -76,7 +76,7 @@ function fmtTime(iso) {
 </script>
 
 <template>
-  <NCard title="Alerts" size="small" class="!bg-white dark:!bg-slate-900">
+  <NCard title="Alarms" size="small" class="!bg-white dark:!bg-slate-900">
     <template #header-extra>
       <div class="flex items-center gap-1.5">
         <NButton
@@ -102,11 +102,11 @@ function fmtTime(iso) {
     </div>
 
     <div v-if="!alerts.length" class="py-10">
-      <NEmpty description="No alerts — everything is quiet" />
+      <NEmpty description="No alarms — everything is quiet" />
     </div>
 
     <div v-else-if="visible.length === 0" class="py-6 text-center text-xs text-slate-500">
-      No alerts match this filter.
+      No alarms match this filter.
       <NButton size="tiny" tertiary @click="filter = 'all'">Show all</NButton>
     </div>
 

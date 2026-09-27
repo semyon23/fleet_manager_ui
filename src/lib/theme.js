@@ -62,12 +62,15 @@ export function stationIconFor(kind) {
 
 // === Ноды waypoint по умолчанию ===
 export const WAYPOINT = {
-  color:       '#94a3b8',   // slate-400
-  colorHover:  '#6b7280',   // slate-500
+  color:       '#475569',   // slate-600 — виден и на белом полу, и на сером препятствии
+  colorHover:  '#1e293b',
+  colorDark:   '#cbd5e1',   // slate-300
+  colorHoverDark: '#f1f5f9',
   colorSelect: '#f97316',   // orange-500
-  radius:      8,
-  strokeWidth: 0,
+  radius:      5,
+  strokeWidth: 1.5,
   strokeColor: '#ffffff',
+  strokeColorDark: '#0f172a',
 }
 
 // === Edges ===
@@ -77,12 +80,18 @@ export const EDGE = {
   colorSelect: '#f97316',
   width:       2,
   widthHover:  3,
-  dasharray:   '10 8',
-  animationSpeed: 30,
+  // Сплошная линия: пунктир начинается заново на каждом ребре,
+  // и дорога из коротких рёбер выглядит рваной на вершинах.
+  dasharray:   0,
+  linecap:     'round',
 }
 
 // === Grid ===
 export const GRID = {
   line:  { color: '#e5e7eb', width: 1, dasharray: 1 },
   thick: { color: '#9ca3af', width: 1, dasharray: 0 },
+}
+export const GRID_DARK = {
+  line:  { color: '#1e293b', width: 1, dasharray: 1 },
+  thick: { color: '#475569', width: 1, dasharray: 0 },
 }
